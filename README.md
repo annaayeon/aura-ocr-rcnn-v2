@@ -140,17 +140,5 @@ If you find this work is helpful to your project, please consider cite our paper
   doi={10.1109/TIM.2020.3043118}}
 ```
 
-### Demonstrations
-
-Two demo-images are listed as follows. They are screenshots from two Youtube videos. The character recognition results are visualized at the center of each bounding box. 
-
-  <p align="center">
-    <img src="./src/button_recognition/scripts/ocr_rcnn_lib/demos/image3.jpg" >
-    Image Source: [https://www.youtube.com/watch?v=bQpEYpg1kLg&t=8s]
-  </p>
-  <p align="center">
-    <img src="./src/button_recognition/scripts/ocr_rcnn_lib/demos/image2.jpg">
-    Image Source: [https://www.youtube.com/watch?v=k1bTibYQjTo&t=9s]
-  </p>
 
 
