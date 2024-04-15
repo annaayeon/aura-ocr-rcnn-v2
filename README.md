@@ -1,4 +1,6 @@
-# [OCR-RCNN: An Accurate and Efficient Framework for Elevator Button Recognition](https://ieeexplore.ieee.org/abstract/document/8594071)
+# Accurate and Efficient Elevator Button Localization
+
+OCR-RCNN-v2 is designed for autonomous elevator manipulation, the goal of which is to enable the robot to autonomously operate elevators that are previously unvisited. This repository contains the perception part of this project.  We published the initial version in paper  [A Novel OCR-RCNN for Elevator Button Recognition](https://ieeexplore.ieee.org/abstract/document/8594071) and this version improves the accuracy by 20% and achieves a real-time running speed ~10FPS (640*480)  on a graphical card (>=GTX950).  We have also tested on a laptop installed with a GTX950M (2G memory). It can achieves a running speed of ~6FPS. We are working on optimizing the TX2 version to make it faster,  which will be soon released with the dataset, as well as the post-processing code. 
 
 ### Requirements
 
@@ -10,9 +12,7 @@
 
 ### Inference
 
-Note: the inference code is moved to **perception** branch and the master branch is used for holding the whole system code, so please check out perception branch for inference!
-
-Before running the code, please first download the [model](https://drive.google.com/file/d/1FVXI-G-EsCrkKbknhHL-9Y1pBshY7JCv/view?usp=sharing) file into the code folder and unzip it. There are five frozen tensorflow models:
+Before running the code, please first download the [models](https://drive.google.com/file/d/1FVXI-G-EsCrkKbknhHL-9Y1pBshY7JCv/view?usp=sharing) into the code folder. There are five frozen tensorflow models:
 
 1. *detection_graph.pb*: a general detection model that can handle panel images with arbitrary size.
 2.  *ocr_graph.pb*: a character recognition model that can handle button images with a size of 180x180.
@@ -22,7 +22,7 @@ Before running the code, please first download the [model](https://drive.google.
 
 For running on laptops and desktops (x86_64), you may need to install some packages :
 
-1. `sudo apt install libjpeg-dev libpng-dev libfreetype6-dev libxml2-dev libxslt1-dev `
+1. `sudo apt install libjpeg-dev libpng12-dev libfreetype6-dev libxml2-dev libxslt1-dev `
 2. `sudo apt install ttf-mscorefonts-installer`
 3. `pip install pillow matplotlib lxml imageio --user` 
 4. `git clone https://github.com/zhudelong/ocr-rcnn-v2.git`
@@ -120,25 +120,17 @@ If you find this work is helpful to your project, please consider cite our paper
   year={2018},
   organization={IEEE}
 }
-@ARTICLE{9324975,
-  author={D. {Zhu} and Y. {Fang} and Z. {Min} and D. {Ho} and M. Q. . -H. {Meng}},
-  journal={IEEE Transactions on Industrial Electronics}, 
-  title={OCR-RCNN: An Accurate and Efficient Framework for Elevator Button Recognition}, 
-  year={2021},
-  volume={},
-  number={},
-  pages={1-1},
-  doi={10.1109/TIE.2021.3050357}}
-@ARTICLE{9295374,
-  author={D. {Zhu} and Z. {Min} and T. {Zhou} and T. {Li} and M. Q. . -H. {Meng}},
-  journal={IEEE Transactions on Instrumentation and Measurement}, 
-  title={An Autonomous Eye-in-Hand Robotic System for Elevator Button Operation Based on Deep Recognition Network}, 
-  year={2021},
-  volume={70},
-  number={},
-  pages={1-13},
-  doi={10.1109/TIM.2020.3043118}}
 ```
 
+### Demonstrations
 
+Two demo-images are listed as follows. They are screenshots from two Youtube videos. The character recognition results are visualized at the center of each bounding box. 
 
+  <p align="center">
+    <img src="./demos/image3.jpg" width=960 height=540>
+    Image Source: [https://www.youtube.com/watch?v=bQpEYpg1kLg&t=8s]
+  </p>
+  <p align="center">
+    <img src="./demos/image2.jpg" width=960 height=540>
+    Image Source: [https://www.youtube.com/watch?v=k1bTibYQjTo&t=9s]
+  </p>
