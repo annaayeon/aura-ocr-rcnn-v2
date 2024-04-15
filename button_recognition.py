@@ -6,7 +6,9 @@ import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
 from utils.ops import native_crop_and_resize
 from utils import visualization_utils as vis_util
-import tensorflow.contrib.tensorrt as trt
+from tensorflow.python.compiler.tensorrt import trt_convert as trt
+
+tf.compat.v1.disable_eager_execution()
 
 charset = {'0': 0,  '1': 1,  '2': 2,  '3': 3,  '4': 4,  '5': 5,
            '6': 6,  '7': 7,  '8': 8,  '9': 9,  'A': 10, 'B': 11,
@@ -37,7 +39,7 @@ class ButtonRecognizer:
     self.class_num = 1
     self.image_size = [480, 640]
     self.recognition_size = [180, 180]
-    self.category_index = {1: {'id': 1, 'name': u'button'}}
+    self.category_index = {1: {'id': 1, 'name': 'button'}}
     self.idx_lbl = {}
     for key in charset.keys():
       self.idx_lbl[charset[key]] = key
@@ -48,22 +50,16 @@ class ButtonRecognizer:
     self.clear_session()
 
   def optimize_rcnn(self, input_graph_def):
-    trt_graph = trt.create_inference_graph(
-      input_graph_def=input_graph_def,
-      outputs=['detection_boxes', 'detection_scores', 'detection_classes', 'num_detections'],
-      max_batch_size = 1,
-      # max_workspace_size_bytes=(2 << 10) << 20,
-      precision_mode = self.precision)
-    return trt_graph
+      trt_graph = tf.experimental.tensorrt.Converter(
+          input_graph_def,
+          precision_mode=self.precision)
+      return trt_graph.convert()
 
   def optimize_ocr(self, input_graph_def):
-    output_graph_def = trt.create_inference_graph(
-      input_graph_def = input_graph_def,
-      outputs = ['predicted_chars', 'predicted_scores'],
-      max_batch_size = 1,
-      # max_workspace_size_bytes=(2 << 10) << 20,
-      precision_mode = self.precision)
-    return output_graph_def
+      trt_graph = tf.experimental.tensorrt.Converter(
+          input_graph_def,
+          precision_mode=self.precision)
+      return trt_graph.convert()
 
   def load_and_merge_graphs(self):
     # check graph paths
@@ -81,8 +77,8 @@ class ButtonRecognizer:
     with ocr_rcnn_graph.as_default():
 
       # load button detection graph definition
-      with tf.gfile.GFile(self.rcnn_graph_path, 'rb') as fid:
-        detection_graph_def = tf.GraphDef()
+      with tf.io.gfile.GFile(self.rcnn_graph_path, 'rb') as fid:
+        detection_graph_def = tf.compat.v1.GraphDef()
         serialized_graph = fid.read()
         detection_graph_def.ParseFromString(serialized_graph)
         # for node in detection_graph_def.node:
@@ -92,8 +88,8 @@ class ButtonRecognizer:
         tf.import_graph_def(detection_graph_def, name='detection')
 
       # load character recognition graph definition
-      with tf.gfile.GFile(self.ocr_graph_path, 'rb') as fid:
-        recognition_graph_def = tf.GraphDef()
+      with tf.io.gfile.GFile(self.ocr_graph_path, 'rb') as fid:
+        recognition_graph_def = tf.compat.v1.GraphDef()
         serialized_graph = fid.read()
         recognition_graph_def.ParseFromString(serialized_graph)
         if self.use_trt:
@@ -102,29 +98,36 @@ class ButtonRecognizer:
 
       # retrive detection tensors
       rcnn_input = ocr_rcnn_graph.get_tensor_by_name('detection/image_tensor:0')
+      print('\n\nrcnn_input.shape : {}\n\n'.format(rcnn_input.shape))
       rcnn_boxes = ocr_rcnn_graph.get_tensor_by_name('detection/detection_boxes:0')
       rcnn_scores = ocr_rcnn_graph.get_tensor_by_name('detection/detection_scores:0')
       rcnn_number = ocr_rcnn_graph.get_tensor_by_name('detection/num_detections:0')
 
       # crop and resize valida boxes (only valid when rcnn input has an known shape)
-      rcnn_number = tf.to_int32(rcnn_number)
+      rcnn_number = tf.cast(rcnn_number, tf.int32)
       valid_boxes = tf.slice(rcnn_boxes, [0, 0, 0], [1, rcnn_number[0], 4])
-      ocr_boxes = native_crop_and_resize(rcnn_input, valid_boxes, self.recognition_size)
-
+      valid_boxes = tf.squeeze(valid_boxes, axis=0)
+      valid_boxes_idx = tf.range(tf.shape(valid_boxes)[1])
+      print('\n\nvalid_boxes.shape : {}\n\n'.format(valid_boxes.shape))
+      print('\n\nvalid_boxes_idx.shape : {}\n\n'.format(valid_boxes_idx.shape))
+      ocr_boxes = tf.image.crop_and_resize(rcnn_input,    # [batch, image_height, image_width, depth]
+                                           valid_boxes,   # [num_boxes, 4]
+                                           valid_boxes_idx,  # [num_boxes]
+                                           self.recognition_size)
       # retrive recognition tensors
       ocr_input = ocr_rcnn_graph.get_tensor_by_name('recognition/ocr_input:0')
       ocr_chars = ocr_rcnn_graph.get_tensor_by_name('recognition/predicted_chars:0')
       ocr_beliefs = ocr_rcnn_graph.get_tensor_by_name('recognition/predicted_scores:0')
-
       self.rcnn_input = rcnn_input
       self.rcnn_output = [rcnn_boxes, rcnn_scores, rcnn_number, ocr_boxes]
       self.ocr_input = ocr_input
       self.ocr_output = [ocr_chars, ocr_beliefs]
     if self.use_tx2:
       gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=3.0/8.0)
-      self.session = tf.Session(graph=ocr_rcnn_graph, config=tf.ConfigProto(gpu_options=gpu_options))
+      self.session = tf.compat.v1.Session(graph=ocr_rcnn_graph, config=tf.ConfigProto(gpu_options=gpu_options))
     else:
-      self.session = tf.Session(graph=ocr_rcnn_graph)
+      self.session = tf.compat.v1.Session(graph=ocr_rcnn_graph)
+
   def clear_session(self):
     if self.session is not None:
       self.session.close()
