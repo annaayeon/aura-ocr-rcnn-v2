@@ -42,8 +42,8 @@ class ButtonTracker:
         texts.append(text.replace(' ', ''))
         beliefs.append(pred.belief)
       return boxes, scores, texts, beliefs
-    except rospy.ServiceException, e:
-      print "recognition service failed: {}".format(e)
+    except rospy.ServiceException as e:
+      print("recognition service failed: {}".format(e))
 
   @staticmethod
   def visualize_recognitions(frame, box, text):
