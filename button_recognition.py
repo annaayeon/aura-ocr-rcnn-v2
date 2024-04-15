@@ -46,8 +46,11 @@ class ButtonRecognizer:
     self.load_and_merge_graphs()
     print('Button recognizer initialized!')
 
-  def __del__(self):
-    self.clear_session()
+  def __enter__(self):
+      return self
+
+  def __exit__(self, exc_type, exc_value, traceback):
+      self.clear_session()
 
   def optimize_rcnn(self, input_graph_def):
       trt_graph = tf.experimental.tensorrt.Converter(
@@ -98,7 +101,6 @@ class ButtonRecognizer:
 
       # retrive detection tensors
       rcnn_input = ocr_rcnn_graph.get_tensor_by_name('detection/image_tensor:0')
-      print('\n\nrcnn_input.shape : {}\n\n'.format(rcnn_input.shape))
       rcnn_boxes = ocr_rcnn_graph.get_tensor_by_name('detection/detection_boxes:0')
       rcnn_scores = ocr_rcnn_graph.get_tensor_by_name('detection/detection_scores:0')
       rcnn_number = ocr_rcnn_graph.get_tensor_by_name('detection/num_detections:0')
@@ -110,8 +112,6 @@ class ButtonRecognizer:
       # 각 상자에 대해 crop_and_resize을 반복하여 적용
       cropped_images = []
       num_boxes = valid_boxes.shape[0]
-      print(valid_boxes,'********')
-      print(num_boxes,'----------------')
       if num_boxes is not None:
         for i in range(num_boxes):
             current_box = valid_boxes[i]
@@ -225,9 +225,10 @@ class ButtonRecognizer:
 
 
 if __name__ == '__main__':
-  recognizer = ButtonRecognizer(use_optimized=True)
-  image = imageio.imread('./test_panels/1.jpg')
-  recognition_list =recognizer.predict(image,True)
-  image = Image.fromarray(image)
-  image.show()
-  recognizer.clear_session()
+    recognizer = ButtonRecognizer(use_optimized=True)
+    image = imageio.imread('./test_panels/1.jpg')
+    recognition_list = recognizer.predict(image, True)
+    image = Image.fromarray(image)
+    image.show()
+    recognizer.clear_session()
+
