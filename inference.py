@@ -2,7 +2,7 @@
 from __future__ import print_function
 import os
 import cv2
-import imageio
+import imageio.v2 as imageio
 import PIL.Image
 import numpy as np
 import tensorflow as tf
@@ -51,13 +51,14 @@ def warm_up(detector, recognizer):
 if __name__ == '__main__':
     data_dir = './test_panels'
     data_list = get_image_name_list(data_dir)
-    detector = ButtonDetector()
+    detector = ButtonDetector(verbose=False)
     recognizer = CharacterRecognizer(verbose=False)
     warm_up(detector, recognizer)
     overall_time = 0
     for data in data_list:
       img_path = os.path.join(data_dir, data+'.jpg')
-      img_np = np.asarray(PIL.Image.open(tf.gfile.GFile(img_path)))
+      with tf.io.gfile.GFile(img_path, 'rb') as file:  
+        img_np = np.asarray(PIL.Image.open(file))  
       t0 = cv2.getTickCount()
       boxes, scores, _ = detector.predict(img_np)
       button_patches, button_positions, _ = button_candidates(boxes, scores, img_np)
