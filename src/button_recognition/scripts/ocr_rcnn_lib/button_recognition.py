@@ -88,7 +88,7 @@ class ButtonRecognizer:
     with ocr_rcnn_graph.as_default():
 
       # load button detection graph definition
-      with tf.gfile.GFile(self.rcnn_graph_path, 'rb') as fid:
+      with tf.io.GFile(self.rcnn_graph_path, 'rb') as fid:
         detection_graph_def = tf.GraphDef()
         serialized_graph = fid.read()
         detection_graph_def.ParseFromString(serialized_graph)
@@ -99,7 +99,7 @@ class ButtonRecognizer:
         tf.import_graph_def(detection_graph_def, name='detection')
 
       # load character recognition graph definition
-      with tf.gfile.GFile(self.ocr_graph_path, 'rb') as fid:
+      with tf.io.GFile(self.ocr_graph_path, 'rb') as fid:
         recognition_graph_def = tf.GraphDef()
         serialized_graph = fid.read()
         recognition_graph_def.ParseFromString(serialized_graph)
