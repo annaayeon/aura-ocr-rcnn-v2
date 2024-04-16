@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from __future__ import print_function
 import os
 import cv2
 import imageio
@@ -8,18 +7,10 @@ import PIL.ImageOps as ImageOps
 import numpy as np
 import tensorflow as tf
 from button_recognition import ButtonRecognizer
+import pyrealsense2 as rs 
 
 DRAW = True
 # DRAW = False
-
-def get_image_name_list(target_path):
-  assert os.path.exists(target_path)
-  image_name_list = []
-  file_set = os.walk(target_path)
-  for root, dirs, files in file_set:
-    for image_name in files:
-      image_name_list.append(image_name.split('.')[0])
-  return image_name_list
 
 def warm_up(model):
   assert isinstance(model, ButtonRecognizer)
@@ -27,34 +18,33 @@ def warm_up(model):
   model.predict(image)
 
 if __name__ == '__main__':
-  data_dir = './test_panels'
-  data_list = get_image_name_list(data_dir)
+  pipeline = rs.pipeline()
+  config = rs.config()
+  config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+  config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+  pipeline.start(config)
+
   recognizer = ButtonRecognizer(use_optimized=True)
   warm_up(recognizer)
-  overall_time = 0
-  for data in data_list:
-    img_path = os.path.join(data_dir, data+'.jpg')
-    with open(img_path, 'rb') as f:
-      image = Image.open(f)
-      # resize to 640x480 with ratio kept
-      image = image.resize((640, 480))
-      delta_w, delta_h = 640 - image.size[0], 480 - image.size[1]
-      padding = (delta_w // 2, delta_h // 2, delta_w - (delta_w // 2), delta_h - (delta_h // 2))
-      new_im = ImageOps.expand(image, padding)
-      img_np = np.copy(np.asarray(new_im))
+  try:
+    while True:
+      frames = pipeline.wait_for_frames()
+      depth_frame = frames.get_depth_frame()
+      color_frame = frames.get_color_frame()
+      if not depth_frame or not color_frame:
+        continue
+      color_image = np.asanyarray(color_frame.get_data())
       # perform button recognition
       t0 = cv2.getTickCount()
-      recognizer.predict(img_np, draw=DRAW)
+      recognizer.predict(color_image, draw=DRAW)
       t1 = cv2.getTickCount()
       time = (t1 - t0) / cv2.getTickFrequency()
-      overall_time += time
-      print('Time elapsed: {}'.format(time)) 
+      fps = 1.0 / time
+      print('FPS :', fps)
       if DRAW:
-          image = Image.fromarray(img_np)
-          image.show()
-
-
-
-    average_time = overall_time / len(data_list)
-    print('Average_used: {}'.format(average_time))
-    # recognizer.clear_session()
+          cv2.imshow('Button Recognition', color_image)
+          if cv2.waitKey(1) & 0xFF == ord('q'):
+              break
+  finally:
+    pipeline.stop()
+    cv2.destroyAllWindows()
