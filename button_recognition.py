@@ -168,14 +168,18 @@ class ButtonRecognizer:
 
     # perform detection and recognition
     boxes, scores, number, ocr_boxes = self.session.run(self.rcnn_output, feed_dict={self.rcnn_input:img_in})
+    print("Boxes, Scores, Number:", boxes, scores, number)  # 검출 결과 로깅
+    print("OCR Boxes:", ocr_boxes)  # OCR 박스 로깅
     boxes, scores, number = [np.squeeze(x) for x in [boxes, scores, number]]
 
     for i in range(number):
+        print("Processing box:", i, "with score:", scores[i])
         if scores[i] < 0.5: continue
         if ocr_boxes:
             chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: ocr_boxes[:,i]})
             chars, beliefs = [np.squeeze(x) for x in [chars, beliefs]]
             text, belief = self.decode_text(chars, beliefs)
+            print(f"OCR 결과: 문자 - {chars}, 신뢰도 - {beliefs}, 해석된 텍스트 - {text}")  # 로깅 추가
         else:
             text, belief = '', 0.0
         recognition_list.append([boxes[i], scores[i], text, belief])
@@ -218,7 +222,10 @@ class ButtonRecognizer:
       y_center = (y_max-y_min) / 2.0
       font_size = min(x_center, y_center)*1.1
       text_center = int(x_center-0.5*font_size), int(y_center-0.5*font_size)
-      font = ImageFont.truetype('/Library/Fonts/Arial.ttf', int(font_size))
+      try:
+          font = ImageFont.truetype('/Library/Fonts/Arial.ttf', int(font_size))  # 변경 가능한 폰트 경로
+      except IOError:
+          font = ImageFont.load_default() 
       img_show.text(text_center, text=item[2], font=font, fill=(255, 0, 255))
       # img_pil.show()
       image_np[y_min: y_max, x_min: x_max] = np.array(img_pil)
