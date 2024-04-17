@@ -6,7 +6,9 @@ import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
 from utils.ops import native_crop_and_resize
 from utils import visualization_utils as vis_util
-#import tensorflow.contrib.tensorrt as trt
+from tensorflow.python.compiler.tensorrt import trt_convert as trt
+
+tf.compat.v1.disable_eager_execution()
 
 charset = {'0': 0,  '1': 1,  '2': 2,  '3': 3,  '4': 4,  '5': 5,
            '6': 6,  '7': 7,  '8': 8,  '9': 9,  'A': 10, 'B': 11,
@@ -23,7 +25,6 @@ class ButtonRecognizer:
                use_tx2=False):
     self.ocr_graph_path = ocr_path
     self.rcnn_graph_path = rcnn_path
-    self.pwd = os.path.dirname(os.path.realpath(__file__))
     self.use_trt = use_trt
     self.precision=precision  #'INT8, FP16, FP32'
     self.use_optimized = use_optimized
@@ -38,46 +39,37 @@ class ButtonRecognizer:
     self.class_num = 1
     self.image_size = [480, 640]
     self.recognition_size = [180, 180]
-    self.category_index = {1: {'id': 1, 'name': u'button'}}
+    self.category_index = {1: {'id': 1, 'name': 'button'}}
     self.idx_lbl = {}
     for key in charset.keys():
       self.idx_lbl[charset[key]] = key
     self.load_and_merge_graphs()
-    self.warm_up()
     print('Button recognizer initialized!')
 
-  def __del__(self):
-    self.clear_session()
-    print('recognition session released!')
+  def __enter__(self):
+      return self
 
-  def warm_up(self):
-    image = imageio.imread(os.path.join(self.pwd,'test_panels/1.jpg'))
-    self.predict(image)
+  def __exit__(self, exc_type, exc_value, traceback):
+      self.clear_session()
 
   def optimize_rcnn(self, input_graph_def):
-    trt_graph = trt.create_inference_graph(
-      input_graph_def=input_graph_def,
-      outputs=['detection_boxes', 'detection_scores', 'detection_classes', 'num_detections'],
-      max_batch_size = 1,
-      # max_workspace_size_bytes=(2 << 10) << 20,
-      precision_mode = self.precision)
-    return trt_graph
+      trt_graph = tf.experimental.tensorrt.Converter(
+          input_graph_def,
+          precision_mode=self.precision)
+      return trt_graph.convert()
 
   def optimize_ocr(self, input_graph_def):
-    output_graph_def = trt.create_inference_graph(
-      input_graph_def = input_graph_def,
-      outputs = ['predicted_chars', 'predicted_scores'],
-      max_batch_size = 1,
-      # max_workspace_size_bytes=(2 << 10) << 20,
-      precision_mode = self.precision)
-    return output_graph_def
+      trt_graph = tf.experimental.tensorrt.Converter(
+          input_graph_def,
+          precision_mode=self.precision)
+      return trt_graph.convert()
 
   def load_and_merge_graphs(self):
     # check graph paths
     if self.ocr_graph_path is None:
-      self.ocr_graph_path = os.path.join(self.pwd, 'frozen_model/ocr_graph.pb')
+      self.ocr_graph_path = './frozen_model/ocr_graph.pb'
     if self.rcnn_graph_path is None:
-      self.rcnn_graph_path = os.path.join(self.pwd, 'frozen_model/detection_graph_640x480.pb')
+      self.rcnn_graph_path = './frozen_model/detection_graph_640x480.pb'
     if self.use_optimized:
       self.ocr_graph_path.replace('.pb', '_optimized.pb')
       self.rcnn_graph_path.replace('.pb', '_optimized.pb')
@@ -89,22 +81,22 @@ class ButtonRecognizer:
 
       # load button detection graph definition
       with tf.io.gfile.GFile(self.rcnn_graph_path, 'rb') as fid:
-        detection_graph_def = tf.GraphDef()
+        detection_graph_def = tf.compat.v1.GraphDef()
         serialized_graph = fid.read()
         detection_graph_def.ParseFromString(serialized_graph)
         # for node in detection_graph_def.node:
         #   print node.name
-        #if self.use_trt:
-          #detection_graph_def = self.optimize_rcnn(detection_graph_def)
+        if self.use_trt:
+          detection_graph_def = self.optimize_rcnn(detection_graph_def)
         tf.import_graph_def(detection_graph_def, name='detection')
 
       # load character recognition graph definition
       with tf.io.gfile.GFile(self.ocr_graph_path, 'rb') as fid:
-        recognition_graph_def = tf.GraphDef()
+        recognition_graph_def = tf.compat.v1.GraphDef()
         serialized_graph = fid.read()
         recognition_graph_def.ParseFromString(serialized_graph)
-        #if self.use_trt:
-          #recognition_graph_def = self.optimize_ocr(recognition_graph_def)
+        if self.use_trt:
+          recognition_graph_def = self.optimize_ocr(recognition_graph_def)
         tf.import_graph_def(recognition_graph_def, name='recognition')
 
       # retrive detection tensors
@@ -114,24 +106,44 @@ class ButtonRecognizer:
       rcnn_number = ocr_rcnn_graph.get_tensor_by_name('detection/num_detections:0')
 
       # crop and resize valida boxes (only valid when rcnn input has an known shape)
-      rcnn_number = tf.to_int32(rcnn_number)
+      rcnn_number = tf.cast(rcnn_number, tf.int32)
       valid_boxes = tf.slice(rcnn_boxes, [0, 0, 0], [1, rcnn_number[0], 4])
-      ocr_boxes = native_crop_and_resize(rcnn_input, valid_boxes, self.recognition_size)
+      valid_boxes = tf.squeeze(valid_boxes, axis=0)
+      # 각 상자에 대해 crop_and_resize을 반복하여 적용
+      cropped_images = []
+      num_boxes = valid_boxes.shape[0]
+      if num_boxes is not None:
+        for i in range(num_boxes):
+            current_box = valid_boxes[i]
+            print('\n\ncurrent_box.shape : {}\n\n'.format(current_box.shape))
+            current_box_idx = tf.range(num_boxes)[i]
+            print('\n\ncbox_idx.shape : {}\n\n'.format(current_box_idx.shape))
+            cropped_image = native_crop_and_resize(rcnn_input, # [batch, image_height, image_width, depth]
+                                                  [current_box], # [num_boxes, 4]
+                                                  [current_box_idx], # [num_boxes]
+                                                  self.recognition_size)
+            cropped_images.append(cropped_image)
 
+        # 모든 cropped 이미지를 쌓아서 하나의 텐서로 만듭니다.
+        ocr_boxes = tf.stack(cropped_images, axis=0)
+      else:
+        ocr_boxes = []
+
+      
       # retrive recognition tensors
       ocr_input = ocr_rcnn_graph.get_tensor_by_name('recognition/ocr_input:0')
       ocr_chars = ocr_rcnn_graph.get_tensor_by_name('recognition/predicted_chars:0')
       ocr_beliefs = ocr_rcnn_graph.get_tensor_by_name('recognition/predicted_scores:0')
-
       self.rcnn_input = rcnn_input
       self.rcnn_output = [rcnn_boxes, rcnn_scores, rcnn_number, ocr_boxes]
       self.ocr_input = ocr_input
       self.ocr_output = [ocr_chars, ocr_beliefs]
     if self.use_tx2:
       gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=3.0/8.0)
-      self.session = tf.Session(graph=ocr_rcnn_graph, config=tf.ConfigProto(gpu_options=gpu_options))
+      self.session = tf.compat.v1.Session(graph=ocr_rcnn_graph, config=tf.ConfigProto(gpu_options=gpu_options))
     else:
-      self.session = tf.Session(graph=ocr_rcnn_graph)
+      self.session = tf.compat.v1.Session(graph=ocr_rcnn_graph)
+
   def clear_session(self):
     if self.session is not None:
       self.session.close()
@@ -156,14 +168,22 @@ class ButtonRecognizer:
 
     # perform detection and recognition
     boxes, scores, number, ocr_boxes = self.session.run(self.rcnn_output, feed_dict={self.rcnn_input:img_in})
+    print("Boxes, Scores, Number:", boxes, scores, number)  # 검출 결과 로깅
+    print("OCR Boxes:", ocr_boxes)  # OCR 박스 로깅
     boxes, scores, number = [np.squeeze(x) for x in [boxes, scores, number]]
 
     for i in range(number):
-      if scores[i] < 0.5: continue
-      chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: ocr_boxes[:,i]})
-      chars, beliefs = [np.squeeze(x) for x in [chars, beliefs]]
-      text, belief = self.decode_text(chars, beliefs)
-      recognition_list.append([boxes[i], scores[i], text, belief])
+        print("Processing box:", i, "with score:", scores[i])
+        if scores[i] < 0.5: continue
+        if ocr_boxes:
+            chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: ocr_boxes[:,i]})
+            chars, beliefs = [np.squeeze(x) for x in [chars, beliefs]]
+            text, belief = self.decode_text(chars, beliefs)
+            print(f"OCR 결과: 문자 - {chars}, 신뢰도 - {beliefs}, 해석된 텍스트 - {text}")  # 로깅 추가
+        else:
+            text, belief = '', 0.0
+        recognition_list.append([boxes[i], scores[i], text, belief])
+
 
     if draw:
       classes = [1]*len(boxes)
@@ -202,16 +222,20 @@ class ButtonRecognizer:
       y_center = (y_max-y_min) / 2.0
       font_size = min(x_center, y_center)*1.1
       text_center = int(x_center-0.5*font_size), int(y_center-0.5*font_size)
-      font = ImageFont.truetype('/Library/Fonts/Arial.ttf', int(font_size))
+      try:
+          font = ImageFont.truetype('/Library/Fonts/Arial.ttf', int(font_size))  # 변경 가능한 폰트 경로
+      except IOError:
+          font = ImageFont.load_default() 
       img_show.text(text_center, text=item[2], font=font, fill=(255, 0, 255))
       # img_pil.show()
       image_np[y_min: y_max, x_min: x_max] = np.array(img_pil)
 
 
 if __name__ == '__main__':
-  recognizer = ButtonRecognizer(use_optimized=True)
-  image = imageio.imread('./test_panels/1.jpg')
-  recognition_list =recognizer.predict(image,True)
-  image = Image.fromarray(image)
-  image.show()
-  recognizer.clear_session()
+    recognizer = ButtonRecognizer(use_optimized=True)
+    image = imageio.imread('./test_panels/1.jpg')
+    recognition_list = recognizer.predict(image, True)
+    image = Image.fromarray(image)
+    image.show()
+    recognizer.clear_session()
+

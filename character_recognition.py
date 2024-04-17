@@ -5,6 +5,8 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
 
+tf.compat.v1.disable_eager_execution()
+
 charset = {'0': 0,  '1': 1,  '2': 2,  '3': 3,  '4': 4,  '5': 5,
            '6': 6,  '7': 7,  '8': 8,  '9': 9,  'A': 10, 'B': 11,
            'C': 12, 'D': 13, 'E': 14, 'F': 15, 'G': 16, 'H': 17,
@@ -42,12 +44,12 @@ class CharacterRecognizer:
     # load frozen graph
     recognition_graph = tf.Graph()
     with recognition_graph.as_default():
-      od_graph_def = tf.GraphDef()
-      with tf.gfile.GFile(self.graph_path, 'rb') as fid:
+      od_graph_def = tf.compat.v1.GraphDef()
+      with tf.io.gfile.GFile(self.graph_path, 'rb') as fid:
         serialized_graph = fid.read()
         od_graph_def.ParseFromString(serialized_graph)
         tf.import_graph_def(od_graph_def, name='')
-    self.session = tf.Session(graph=recognition_graph)
+    self.session = tf.compat.v1.Session(graph=recognition_graph)
 
     # prepare input and output request
     self.input = recognition_graph.get_tensor_by_name('ocr_input:0')
