@@ -36,7 +36,7 @@ if __name__ == '__main__':
       color_image = np.asanyarray(color_frame.get_data())
       # perform button recognition
       t0 = cv2.getTickCount()
-      recognizer.predict(color_image, draw=DRAW)
+      recognizer.predict(color_image, depth_frame, draw=DRAW)
       t1 = cv2.getTickCount()
       time = (t1 - t0) / cv2.getTickFrequency()
       fps = 1.0 / time

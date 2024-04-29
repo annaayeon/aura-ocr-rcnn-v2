@@ -156,13 +156,14 @@ class ButtonRecognizer:
     score_ave /= len(text)
     return text, score_ave
 
-  def predict(self, image_np, draw=False):
+  def predict(self, image_np, depth_frame, draw=False):
     # input data
     assert image_np.shape == (480, 640, 3)
     img_in = np.expand_dims(image_np, axis=0)
 
     # output data
     recognition_list = []
+    boxes_xyd = []
 
     # perform detection and recognition
     boxes, scores, number, ocr_boxes = self.session.run(self.rcnn_output, feed_dict={self.rcnn_input:img_in})
@@ -172,6 +173,8 @@ class ButtonRecognizer:
         if scores[i] < 0.5: continue
         center_x = (boxes[i][1] + boxes[i][3]) * 0.5 * self.image_size[1]
         center_y = (boxes[i][0] + boxes[i][2]) * 0.5 * self.image_size[0]
+        depth = depth_frame.get_distance(int(center_x), int(center_y)) * 1000 # 단위 mm
+        boxes_xyd.append([center_x,center_y,depth]) 
         if ocr_boxes:
             chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: ocr_boxes[:,i]})
             chars, beliefs = [np.squeeze(x) for x in [chars, beliefs]]
