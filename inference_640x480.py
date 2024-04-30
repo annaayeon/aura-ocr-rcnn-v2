@@ -8,14 +8,66 @@ import numpy as np
 import tensorflow as tf
 from button_recognition import ButtonRecognizer
 import pyrealsense2 as rs 
+import rospy
+import tf2_ros
+import math
+from geometry_msgs.msg import TransformStamped
 
 DRAW = True
 # DRAW = False
 
-def warm_up(model):
-  assert isinstance(model, ButtonRecognizer)
-  image = imageio.imread('./test_panels/1.jpg')
-  model.predict(image)
+class BoxTFPublisher:
+    def __init__(self):
+        rospy.init_node('bounding_box_tf_publisher')
+        self.broadcaster = tf2_ros.TransformBroadcaster()
+        self.frame_id = 'camera_frame' 
+
+    def publish_transforms(self, boxes_xyd, m_depth):
+        # x 값에 따라 오름차순 정렬
+        sorted_boxes = sorted(boxes_xyd, key=lambda box: box[0])
+        
+        for i, box in enumerate(sorted_boxes):
+            center_x, center_y, depth = box
+            tf_y, tf_z = self.calculate_transform(m_depth, center_x, center_y, depth)
+            self.send_transform(m_depth, tf_y, tf_z, i)
+
+    def calculate_transform(self, m_depth, center_x, center_y, depth):
+      mx = 320
+      my = 240
+      
+      pixel_y = center_x - mx
+      if pixel_y < 0:
+        pixel_y = -pixel_y
+      pixel_z = center_y - my
+      if pixel_z < 0:
+         pixel_z = -pixel_z
+      
+      if depth**2 < m_depth**2:
+        yz_distance = math.sqrt(m_depth**2 - depth**2)
+      else:
+        yz_distance = math.sqrt(depth**2 - m_depth**2)  # yz 평면 상 거리
+      yz_pixel = math.sqrt(pixel_y**2 + pixel_z**2) # yz 평면 상 픽셀 거리
+      scale_yz = yz_distance / yz_pixel if yz_pixel != 0 else 0
+
+      tf_y = pixel_y * scale_yz
+      tf_z = pixel_z * scale_yz
+
+      return tf_y, tf_z
+
+
+    def send_transform(self, x, y, d, box_id):
+        t = TransformStamped()
+        t.header.stamp = rospy.Time.now()
+        t.header.frame_id = self.frame_id
+        t.child_frame_id = f"box_{box_id+1}"
+        t.transform.translation.x = x
+        t.transform.translation.y = y
+        t.transform.translation.z = d
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 0.0
+        self.broadcaster.sendTransform(t)
 
 if __name__ == '__main__':
   pipeline = rs.pipeline()
@@ -25,9 +77,11 @@ if __name__ == '__main__':
   pipeline.start(config)
 
   recognizer = ButtonRecognizer(use_optimized=True)
-  warm_up(recognizer)
+  box_publisher = BoxTFPublisher()
+  rate = rospy.Rate(10)
+
   try:
-    while True:
+    while not rospy.is_shutdown():
       frames = pipeline.wait_for_frames()
       depth_frame = frames.get_depth_frame()
       color_frame = frames.get_color_frame()
@@ -36,15 +90,20 @@ if __name__ == '__main__':
       color_image = np.asanyarray(color_frame.get_data())
       # perform button recognition
       t0 = cv2.getTickCount()
-      recognizer.predict(color_image, draw=DRAW)
+      recognition_list, boxes_xyd, m_depth = recognizer.predict(color_image, depth_frame, draw=DRAW)
+      # recognizer.predict(color_image, depth_frame, draw=DRAW)
       t1 = cv2.getTickCount()
       time = (t1 - t0) / cv2.getTickFrequency()
       fps = 1.0 / time
       print('FPS :', fps)
+      box_publisher.publish_transforms(boxes_xyd, m_depth)
       if DRAW:
           cv2.imshow('Button Recognition', color_image)
           if cv2.waitKey(1) & 0xFF == ord('q'):
               break
+  except rospy.ROSInterruptException:
+      pass
   finally:
     pipeline.stop()
+    recognizer.clear_session()
     cv2.destroyAllWindows()
