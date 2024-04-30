@@ -189,7 +189,8 @@ class ButtonRecognizer:
       self.draw_detection_result(image_np, boxes, classes, scores, self.category_index)
       self.draw_recognition_result(image_np, recognition_list)
 
-    return recognition_list
+    print('버튼 개수 :',len(boxes_xyd))
+    return recognition_list, boxes_xyd
 
   @staticmethod
   def draw_detection_result(image_np, boxes, classes, scores, category, predict_chars=None):
@@ -233,7 +234,7 @@ class ButtonRecognizer:
 if __name__ == '__main__':
     recognizer = ButtonRecognizer(use_optimized=True)
     image = imageio.imread('./test_panels/1.jpg')
-    recognition_list = recognizer.predict(image, True)
+    recognition_list, boxes_xyd = recognizer.predict(image, True)
     image = Image.fromarray(image)
     image.show()
     recognizer.clear_session()
