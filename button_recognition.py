@@ -173,7 +173,7 @@ class ButtonRecognizer:
         if scores[i] < 0.5: continue
         center_x = (boxes[i][1] + boxes[i][3]) * 0.5 * self.image_size[1]
         center_y = (boxes[i][0] + boxes[i][2]) * 0.5 * self.image_size[0]
-        depth = depth_frame.get_distance(int(center_x), int(center_y)) * 1000 # 단위 mm
+        depth = depth_frame.get_distance(int(center_x), int(center_y))
         boxes_xyd.append([center_x,center_y,depth]) 
         if ocr_boxes:
             chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: ocr_boxes[:,i]})
@@ -182,7 +182,7 @@ class ButtonRecognizer:
         else:
             text, belief = '', 0.0
         recognition_list.append([boxes[i], scores[i], text, belief])
-
+    m_depth = depth_frame.get_distance(320, 240)
 
     if draw:
       classes = [1]*len(boxes)
@@ -190,7 +190,7 @@ class ButtonRecognizer:
       self.draw_recognition_result(image_np, recognition_list)
 
     print('버튼 개수 :',len(boxes_xyd))
-    return recognition_list, boxes_xyd
+    return recognition_list, boxes_xyd, m_depth
 
   @staticmethod
   def draw_detection_result(image_np, boxes, classes, scores, category, predict_chars=None):
@@ -234,7 +234,7 @@ class ButtonRecognizer:
 if __name__ == '__main__':
     recognizer = ButtonRecognizer(use_optimized=True)
     image = imageio.imread('./test_panels/1.jpg')
-    recognition_list, boxes_xyd = recognizer.predict(image, True)
+    recognition_list, boxes_xyd, m_depth = recognizer.predict(image, True)
     image = Image.fromarray(image)
     image.show()
     recognizer.clear_session()
