@@ -5,8 +5,8 @@ OCR-RCNN-v2 is designed for autonomous elevator manipulation, the goal of which 
 ### Requirements
 
 1.  Ubuntu == 20.04
-2.  TensorFlow == 1.12.0
-3.  Numpy == 
+2.  TensorFlow == 2.3.0
+3.  Numpy == 1.18.5
 4.  Python == 3.8
 5.  Tensorrt == 4.0 (optional)
 6.  2GB GPU (or shared) memory 
