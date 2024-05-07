@@ -13,14 +13,7 @@ OCR-RCNN-v2 is designed for autonomous elevator manipulation, the goal of which 
 
 ### Inference
 
-Before running the code, please first download the [models](https://drive.google.com/file/d/1FVXI-G-EsCrkKbknhHL-9Y1pBshY7JCv/view?usp=sharing) into the code folder. There are five frozen tensorflow models:
-
-1. *detection_graph.pb*: a general detection model that can handle panel images with arbitrary size.
-2.  *ocr_graph.pb*: a character recognition model that can handle button images with a size of 180x180.
-3. *detection_graph_640x480.pb*: a detection model  fixed-size image as input.
-4. *detection_graph_640x480_optimized.pb*: an optimized version of the detection model.
-5. *ocr_graph_optimized.pb*:  an optimized version of the recognition model.
-
+Before running the code, please first download the [models](https://drive.google.com/file/d/1FVXI-G-EsCrkKbknhHL-9Y1pBshY7JCv/view?usp=sharing) into the code folder.
 For running on laptops and desktops (x86_64), you may need to install some packages :
 
 1. `sudo apt install libjpeg-dev libpng12-dev libfreetype6-dev libxml2-dev libxslt1-dev `
