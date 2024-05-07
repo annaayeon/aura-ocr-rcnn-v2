@@ -25,11 +25,10 @@ For running on laptops and desktops (x86_64), you may need to install some packa
 
 1. `sudo apt install libjpeg-dev libpng12-dev libfreetype6-dev libxml2-dev libxslt1-dev `
 2. `sudo apt install ttf-mscorefonts-installer`
-3. `pip install pillow matplotlib lxml imageio --user` 
-4. `git clone https://github.com/zhudelong/ocr-rcnn-v2.git`
-5. `cd ocr-rcnn-v2`
-6. ``mv frozen/ ocr-rcnn-v2/``
-7. `python inference.py`  (slow version with two models loaded separately) 
-8. ``python inference_640x480.py`` (fast version with two models merged)
-9. `python ocr-rcnn-v2-visual.py` (for visualization)
-
+3. `sudo add-apt-repository multiverse`
+4. `sudo apt update`
+5. `pip install pillow matplotlib lxml imageio --user` 
+6. `git clone https://github.com/annaayeon/ocr-rcnn-v2.git`
+7. `cd ocr-rcnn-v2`
+8. ``mv frozen/ ocr-rcnn-v2/``
+9. ``python inference_640x480.py``
