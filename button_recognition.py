@@ -108,6 +108,7 @@ class ButtonRecognizer:
       # crop and resize valida boxes (only valid when rcnn input has an known shape)
       rcnn_number = tf.cast(rcnn_number, tf.int32)
       valid_boxes = tf.slice(rcnn_boxes, [0, 0, 0], [1, rcnn_number[0], 4])
+
       ocr_boxes = native_crop_and_resize(rcnn_input, valid_boxes, self.recognition_size)
 
       # retrive recognition tensors
@@ -146,6 +147,7 @@ class ButtonRecognizer:
 
     # output data
     recognition_list = []
+    boxes_xyd = []
 
     # perform detection and recognition
     boxes, scores, number, ocr_boxes = self.session.run(self.rcnn_output, feed_dict={self.rcnn_input:img_in})
@@ -157,6 +159,7 @@ class ButtonRecognizer:
         center_y = (boxes[i][0] + boxes[i][2]) * 0.5 * self.image_size[0]
         depth = depth_frame.get_distance(int(center_x), int(center_y))
         if ocr_boxes.any():
+
             chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: ocr_boxes[:,i]})
             chars, beliefs = [np.squeeze(x) for x in [chars, beliefs]]
             text, belief = self.decode_text(chars, beliefs)
