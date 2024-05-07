@@ -64,7 +64,6 @@ class ButtonRecognizer:
           precision_mode=self.precision)
       return trt_graph.convert()
 
-
   def load_and_merge_graphs(self):
     # check graph paths
     if self.ocr_graph_path is None:
@@ -111,29 +110,27 @@ class ButtonRecognizer:
       # crop and resize valida boxes (only valid when rcnn input has an known shape)
       rcnn_number = tf.cast(rcnn_number, tf.int32)  # bounding box 개수 (1차원 배열 int)
       valid_boxes = tf.slice(rcnn_boxes, [0, 0, 0], [1, rcnn_number[0], 4]) # bounding box 좌표 : (batch, box 개수, 좌표정보)
-      # valid_boxes = tf.squeeze(valid_boxes, axis=0) # batch 차원 삭제
-      
-
-      ocr_boxes = native_crop_and_resize(rcnn_input, valid_boxes, self.recognition_size)
-      # # 각 상자에 대해 crop_and_resize을 반복하여 적용
-      # cropped_images = []
-      # num_boxes = valid_boxes.shape[0]
-      # if num_boxes is not None:
-      #   for i in range(num_boxes):
-      #       current_box = valid_boxes[i]
-      #       # print('\n\ncurrent_box.shape : {}\n\n'.format(current_box.shape))
-      #       current_box_idx = tf.range(num_boxes)[i]
-      #       # print('\n\ncbox_idx.shape : {}\n\n'.format(current_box_idx.shape))
-      #       cropped_image = native_crop_and_resize(rcnn_input, # [batch, image_height, image_width, depth]
-      #                                             [current_box], # [num_boxes, 4]
-      #                                             [current_box_idx], # [num_boxes]
-      #                                             self.recognition_size)
-      #       cropped_images.append(cropped_image)
-
-      #   # 모든 cropped 이미지를 쌓아서 하나의 텐서로 만듭니다.
-      #   ocr_boxes = tf.stack(cropped_images, axis=0)
-      # else:
-      #   ocr_boxes = []
+      valid_boxes = tf.squeeze(valid_boxes, axis=0) # batch 차원 삭제
+      # ocr_boxes = native_crop_and_resize(rcnn_input, valid_boxes, self.recognition_size)
+      # 각 상자에 대해 crop_and_resize을 반복하여 적용
+      cropped_images = []
+      num_boxes = valid_boxes.shape[1]
+      if num_boxes is not None:
+        for i in range(num_boxes):
+            current_box = valid_boxes[i]
+            # print('\n\ncurrent_box.shape : {}\n\n'.format(current_box.shape))
+            current_box_idx = tf.range(num_boxes)[i]
+            # print('\n\ncbox_idx.shape : {}\n\n'.format(current_box_idx.shape))
+            cropped_image = tf.image.crop_and_resize(image=rcnn_input, # [batch, image_height, image_width, depth]
+                                                  boxes=[current_box], # [num_boxes, 4]
+                                                  box_indices=[current_box_idx], # [num_boxes]
+                                                  crop_size=self.recognition_size)
+            cropped_images.append(cropped_image)
+        # 모든 cropped 이미지를 쌓아서 하나의 텐서로 만듭니다.
+        ocr_boxes = tf.stack(cropped_images, axis=0)
+        
+      else:
+        ocr_boxes = []
 
       # retrive recognition tensors
       ocr_input = ocr_rcnn_graph.get_tensor_by_name('recognition/ocr_input:0')
@@ -167,7 +164,7 @@ class ButtonRecognizer:
     score_ave /= len(text)
     return text, score_ave
 
-  def predict(self, image_np, draw=False):
+  def predict(self, image_np, depth_frame, draw=False):
     # input data
     assert image_np.shape == (480, 640, 3), 'input image size is not (480, 640, 3)'
     # img_in.shape = (1, 480, 620, 3) --> batch size 추가
@@ -175,6 +172,7 @@ class ButtonRecognizer:
 
     # output data
     recognition_list = []
+    boxes_xyd = []
 
     # perform detection and recognition
     boxes, scores, number, ocr_boxes = self.session.run(self.rcnn_output, feed_dict={self.rcnn_input:img_in})
@@ -182,21 +180,28 @@ class ButtonRecognizer:
 
     for i in range(number):
         if scores[i] < 0.5: continue
-        if ocr_boxes.any():
+        center_x = (boxes[i][1] + boxes[i][3]) * 0.5 * self.image_size[1]
+        center_y = (boxes[i][0] + boxes[i][2]) * 0.5 * self.image_size[0]
+        depth = depth_frame.get_distance(int(center_x), int(center_y))
+        boxes_xyd.append([center_x,center_y,depth]) 
+        if ocr_boxes:
+            print('\n\n\n')
+            print(ocr_boxes)
             chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: ocr_boxes[:,i]})
             chars, beliefs = [np.squeeze(x) for x in [chars, beliefs]]
             text, belief = self.decode_text(chars, beliefs)
         else:
             text, belief = '', 0.0
         recognition_list.append([boxes[i], scores[i], text, belief])
-
+    m_depth = depth_frame.get_distance(320, 240)
 
     if draw:
       classes = [1]*len(boxes)
       self.draw_detection_result(image_np, boxes, classes, scores, self.category_index)
       self.draw_recognition_result(image_np, recognition_list)
 
-    return recognition_list
+    print('버튼 개수 :',len(boxes_xyd))
+    return recognition_list, boxes_xyd, m_depth
 
   @staticmethod
   def draw_detection_result(image_np, boxes, classes, scores, category, predict_chars=None):
@@ -236,12 +241,10 @@ class ButtonRecognizer:
       # img_pil.show()
       image_np[y_min: y_max, x_min: x_max] = np.array(img_pil)
 
-
 if __name__ == '__main__':
     recognizer = ButtonRecognizer(use_optimized=True)
     image = imageio.imread('./test_panels/1.jpg')
-    recognition_list = recognizer.predict(image, True)
+    recognition_list, boxes_xyd, m_depth = recognizer.predict(image, True)
     image = Image.fromarray(image)
     image.show()
     recognizer.clear_session()
-
