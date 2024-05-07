@@ -11,7 +11,7 @@ def native_crop_and_resize(image, boxes, crop_size, scope=None):
         tf.range(start=0, limit=proposals_shape[0]), 1)
     return tf.reshape(ones_mat * multiplier, [-1])
 
-  with tf.name_scope(scope, 'CropAndResize'):
+  with tf.name_scope('CropAndResize'):
     cropped_regions = tf.image.crop_and_resize(
         image, tf.reshape(boxes, [-1] + boxes.shape.as_list()[2:]),
         get_box_inds(boxes), crop_size)

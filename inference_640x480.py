@@ -22,14 +22,12 @@ class BoxTFPublisher:
         self.broadcaster = tf2_ros.TransformBroadcaster()
         self.frame_id = 'camera_frame' 
 
-    def publish_transforms(self, boxes_xyd, m_depth):
-        # x 값에 따라 오름차순 정렬
-        sorted_boxes = sorted(boxes_xyd, key=lambda box: box[0])
-        
-        for i, box in enumerate(sorted_boxes):
-            center_x, center_y, depth = box
-            tf_y, tf_z = self.calculate_transform(m_depth, center_x, center_y, depth)
-            self.send_transform(m_depth, tf_y, tf_z, i)
+    def publish_transforms(self, recognition_list, m_depth):
+        for recognition in recognition_list:
+           text = recognition[2]
+           center_x, center_y, depth = recognition[4]
+           tf_y, tf_z = self.calculate_transform(m_depth, center_x, center_y, depth)
+           self.send_transform(m_depth, tf_y, tf_z, text)
 
     def calculate_transform(self, m_depth, center_x, center_y, depth):
       mx = 320
@@ -55,11 +53,11 @@ class BoxTFPublisher:
       return tf_y, tf_z
 
 
-    def send_transform(self, x, y, d, box_id):
+    def send_transform(self, x, y, d, text):
         t = TransformStamped()
         t.header.stamp = rospy.Time.now()
         t.header.frame_id = self.frame_id
-        t.child_frame_id = f"box_{box_id+1}"
+        t.child_frame_id = 'button_'+text
         t.transform.translation.x = x
         t.transform.translation.y = y
         t.transform.translation.z = d
@@ -90,13 +88,13 @@ if __name__ == '__main__':
       color_image = np.asanyarray(color_frame.get_data())
       # perform button recognition
       t0 = cv2.getTickCount()
-      recognition_list, boxes_xyd, m_depth = recognizer.predict(color_image, depth_frame, draw=DRAW)
+      recognition_list, m_depth = recognizer.predict(color_image, depth_frame, draw=DRAW)
       # recognizer.predict(color_image, depth_frame, draw=DRAW)
       t1 = cv2.getTickCount()
       time = (t1 - t0) / cv2.getTickFrequency()
       fps = 1.0 / time
       print('FPS :', fps)
-      box_publisher.publish_transforms(boxes_xyd, m_depth)
+      box_publisher.publish_transforms(recognition_list, m_depth)
       if DRAW:
           cv2.imshow('Button Recognition', color_image)
           if cv2.waitKey(1) & 0xFF == ord('q'):

@@ -109,29 +109,13 @@ class ButtonRecognizer:
       rcnn_number = tf.cast(rcnn_number, tf.int32)
       valid_boxes = tf.slice(rcnn_boxes, [0, 0, 0], [1, rcnn_number[0], 4])
 
-      # 각 상자에 대해 crop_and_resize을 반복하여 적용
-      cropped_images = []
-      num_boxes = valid_boxes.shape[1]
-      if num_boxes is not None:
-        for i in range(num_boxes):
-            current_box = valid_boxes[i]
-            cropped_image = native_crop_and_resize(rcnn_input, # [batch, image_height, image_width, depth]
-                                                  [current_box], # [1,num_boxes, 4]
+      ocr_boxes = native_crop_and_resize(rcnn_input, valid_boxes, self.recognition_size)
 
-                                                  self.recognition_size)
-            cropped_images.append(cropped_image)
-
-        # 모든 cropped 이미지를 쌓아서 하나의 텐서로 만듭니다.
-        ocr_boxes = tf.stack(cropped_images, axis=0)
-        
-      else:
-        ocr_boxes = []
-
-      
       # retrive recognition tensors
       ocr_input = ocr_rcnn_graph.get_tensor_by_name('recognition/ocr_input:0')
       ocr_chars = ocr_rcnn_graph.get_tensor_by_name('recognition/predicted_chars:0')
       ocr_beliefs = ocr_rcnn_graph.get_tensor_by_name('recognition/predicted_scores:0')
+
       self.rcnn_input = rcnn_input
       self.rcnn_output = [rcnn_boxes, rcnn_scores, rcnn_number, ocr_boxes]
       self.ocr_input = ocr_input
@@ -174,14 +158,14 @@ class ButtonRecognizer:
         center_x = (boxes[i][1] + boxes[i][3]) * 0.5 * self.image_size[1]
         center_y = (boxes[i][0] + boxes[i][2]) * 0.5 * self.image_size[0]
         depth = depth_frame.get_distance(int(center_x), int(center_y))
-        boxes_xyd.append([center_x,center_y,depth]) 
-        if ocr_boxes:
+        if ocr_boxes.any():
+
             chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: ocr_boxes[:,i]})
             chars, beliefs = [np.squeeze(x) for x in [chars, beliefs]]
             text, belief = self.decode_text(chars, beliefs)
         else:
             text, belief = '', 0.0
-        recognition_list.append([boxes[i], scores[i], text, belief])
+        recognition_list.append([boxes[i], scores[i], text, belief, [center_x, center_y, depth]])
     m_depth = depth_frame.get_distance(320, 240)
 
     if draw:
@@ -189,8 +173,7 @@ class ButtonRecognizer:
       self.draw_detection_result(image_np, boxes, classes, scores, self.category_index)
       self.draw_recognition_result(image_np, recognition_list)
 
-    print('버튼 개수 :',len(boxes_xyd))
-    return recognition_list, boxes_xyd, m_depth
+    return recognition_list, m_depth
 
   @staticmethod
   def draw_detection_result(image_np, boxes, classes, scores, category, predict_chars=None):
@@ -234,8 +217,7 @@ class ButtonRecognizer:
 if __name__ == '__main__':
     recognizer = ButtonRecognizer(use_optimized=True)
     image = imageio.imread('./test_panels/1.jpg')
-    recognition_list, boxes_xyd, m_depth = recognizer.predict(image, True)
+    recognition_list, m_depth = recognizer.predict(image, True)
     image = Image.fromarray(image)
     image.show()
     recognizer.clear_session()
-
