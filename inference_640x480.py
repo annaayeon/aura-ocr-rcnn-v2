@@ -1,9 +1,5 @@
 #!/usr/bin/env python
-import os
 import cv2
-import imageio
-from PIL import Image
-import PIL.ImageOps as ImageOps
 import numpy as np
 import tensorflow as tf
 from button_recognition import ButtonRecognizer
@@ -52,7 +48,6 @@ class BoxTFPublisher:
 
       return tf_y, tf_z
 
-
     def send_transform(self, x, y, d, text):
         t = TransformStamped()
         t.header.stamp = rospy.Time.now()
@@ -67,16 +62,21 @@ class BoxTFPublisher:
         t.transform.rotation.w = 0.0
         self.broadcaster.sendTransform(t)
 
+
 if __name__ == '__main__':
   pipeline = rs.pipeline()
   config = rs.config()
   config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
   config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-  pipeline.start(config)
+  profile = pipeline.start(config)
+  depth_profile = rs.video_stream_profile(profile.get_stream(rs.stream.depth))
+  intrinsics = depth_profile.get_intrinsics()
 
   recognizer = ButtonRecognizer(use_optimized=True)
   box_publisher = BoxTFPublisher()
   rate = rospy.Rate(10)
+  pc = rs.pointcloud()
+  colorizer = rs.colorizer()
 
   try:
     while not rospy.is_shutdown():
@@ -86,6 +86,14 @@ if __name__ == '__main__':
       if not depth_frame or not color_frame:
         continue
       color_image = np.asanyarray(color_frame.get_data())
+
+      # create pointcloud
+      points = pc.calculate(depth_frame)
+      pc.map_to(color_frame)
+      verts = np.asanyarray(points.get_vertices()).view(np.float32).reshape(-1, 3)
+      texcoords = np.asanyarray(points.get_texture_coordinates()).view(np.float32).reshape(-1, 2)
+      depth_colormap = np.asanyarray(colorizer.colorize(depth_frame).get_data())
+
       # perform button recognition
       t0 = cv2.getTickCount()
       recognition_list, m_depth = recognizer.predict(color_image, depth_frame, draw=DRAW)
@@ -97,6 +105,7 @@ if __name__ == '__main__':
       box_publisher.publish_transforms(recognition_list, m_depth)
       if DRAW:
           cv2.imshow('Button Recognition', color_image)
+          cv2.imshow('Point Cloud', depth_colormap)
           if cv2.waitKey(1) & 0xFF == ord('q'):
               break
   except rospy.ROSInterruptException:
