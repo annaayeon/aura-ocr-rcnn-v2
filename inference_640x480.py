@@ -12,6 +12,38 @@ from geometry_msgs.msg import TransformStamped
 DRAW = True
 # DRAW = False
 
+class RealSenseCamera:
+    def __init__(self, width=640, height=480, fps=30):
+        self.pipeline = rs.pipeline()
+        self.config = rs.config()
+        self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
+        self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
+        self.profile = self.pipeline.start(self.config)
+        depth_profile = rs.video_stream_profile(self.profile.get_stream(rs.stream.depth))
+        self.intrinsics = depth_profile.get_intrinsics()
+        self.pointcloud = rs.pointcloud()
+        self.colorizer = rs.colorizer()
+
+    def get_frames(self):
+        frames = self.pipeline.wait_for_frames()
+        depth_frame = frames.get_depth_frame()
+        color_frame = frames.get_color_frame()
+        if not depth_frame or not color_frame:
+            return None, None
+        color_image = np.asanyarray(color_frame.get_data())
+        return depth_frame, color_frame, color_image
+
+    def create_pointcloud(self, depth_frame, color_frame):
+        points = self.pointcloud.calculate(depth_frame)
+        self.pointcloud.map_to(color_frame)
+        verts = np.asanyarray(points.get_vertices()).view(np.float32).reshape(-1, 3)
+        texcoords = np.asanyarray(points.get_texture_coordinates()).view(np.float32).reshape(-1, 2)
+        depth_colormap = np.asanyarray(self.colorizer.colorize(depth_frame).get_data())
+        return verts, texcoords, depth_colormap
+
+    def stop(self):
+        self.pipeline.stop()
+
 class BoxTFPublisher:
     def __init__(self):
         rospy.init_node('bounding_box_tf_publisher')
@@ -64,35 +96,17 @@ class BoxTFPublisher:
 
 
 if __name__ == '__main__':
-  pipeline = rs.pipeline()
-  config = rs.config()
-  config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-  config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-  profile = pipeline.start(config)
-  depth_profile = rs.video_stream_profile(profile.get_stream(rs.stream.depth))
-  intrinsics = depth_profile.get_intrinsics()
-
+  camera = RealSenseCamera()
   recognizer = ButtonRecognizer(use_optimized=True)
   box_publisher = BoxTFPublisher()
   rate = rospy.Rate(10)
-  pc = rs.pointcloud()
-  colorizer = rs.colorizer()
 
   try:
     while not rospy.is_shutdown():
-      frames = pipeline.wait_for_frames()
-      depth_frame = frames.get_depth_frame()
-      color_frame = frames.get_color_frame()
-      if not depth_frame or not color_frame:
-        continue
-      color_image = np.asanyarray(color_frame.get_data())
-
-      # create pointcloud
-      points = pc.calculate(depth_frame)
-      pc.map_to(color_frame)
-      verts = np.asanyarray(points.get_vertices()).view(np.float32).reshape(-1, 3)
-      texcoords = np.asanyarray(points.get_texture_coordinates()).view(np.float32).reshape(-1, 2)
-      depth_colormap = np.asanyarray(colorizer.colorize(depth_frame).get_data())
+      depth_frame, color_frame, color_image = camera.get_frames()
+      if depth_frame is None or color_frame is None or color_image is None:
+          continue
+      verts, texcoords, depth_colormap = camera.create_pointcloud(depth_frame, color_frame) 
 
       # perform button recognition
       t0 = cv2.getTickCount()
@@ -102,15 +116,18 @@ if __name__ == '__main__':
       time = (t1 - t0) / cv2.getTickFrequency()
       fps = 1.0 / time
       print('FPS :', fps)
+
       box_publisher.publish_transforms(recognition_list, m_depth)
+
       if DRAW:
           cv2.imshow('Button Recognition', color_image)
           cv2.imshow('Point Cloud', depth_colormap)
           if cv2.waitKey(1) & 0xFF == ord('q'):
               break
+          
   except rospy.ROSInterruptException:
       pass
   finally:
-    pipeline.stop()
+    camera.stop()
     recognizer.clear_session()
     cv2.destroyAllWindows()
