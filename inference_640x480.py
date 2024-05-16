@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 import cv2
 import numpy as np
-import tensorflow as tf
 from button_recognition import ButtonRecognizer
 import pyrealsense2 as rs 
 import rospy
 import tf2_ros
-import math
 from geometry_msgs.msg import TransformStamped
 
 DRAW = True
@@ -56,7 +54,7 @@ class BoxTFPublisher:
             pixel = recognition[4]
             point = self.get_3d_coordinates(depth_frame, pixel, intrinsics)
             self.send_transform(point, text)
-    
+            
     def get_3d_coordinates(self, depth_frame, pixel, intrinsics):
         """
         3D 좌표 (X, Y, Z) = (오른쪽+, 아래+, 앞+)
