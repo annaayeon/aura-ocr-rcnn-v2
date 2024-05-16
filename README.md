@@ -37,10 +37,19 @@ To run the inference, follow these steps:
     ```sh
     git clone https://github.com/annaayeon/ocr-rcnn-v2.git
     ```
-2. Run the inference script:
+2. Navigate to the project directory:
     ```sh
     cd ocr-rcnn-v2
+    ```
+3. Run the inference script:
+    ```sh
     python inference_640x480.py
     ```
 
-We hope you find this project useful for your autonomous elevator manipulation tasks. If you encounter any issues or have any questions, feel free to open an issue on this repository. Happy coding!
+## Real-Time Elevator Button Detection
+
+This project utilizes the Intel RealSense Depth Camera D435i for real-time elevator button detection. The camera captures depth information, which is crucial for accurately locating and identifying elevator buttons in three-dimensional space.
+
+### ROS Integration
+
+OCR-RCNN-v2 is integrated with ROS (Robot Operating System) to publish the detected button locations. The detected button coordinates are published as `TransformStamped` messages in the `geometry_msgs.msg` format. This allows seamless communication with other ROS nodes, enabling comprehensive robot control and automation.
