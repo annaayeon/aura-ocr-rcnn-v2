@@ -6,7 +6,6 @@ import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
 from utils.ops import native_crop_and_resize
 from utils import visualization_utils as vis_util
-from tensorflow.python.compiler.tensorrt import trt_convert as trt
 
 tf.compat.v1.disable_eager_execution()
 
