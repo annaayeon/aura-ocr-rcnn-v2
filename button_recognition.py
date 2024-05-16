@@ -139,14 +139,13 @@ class ButtonRecognizer:
     score_ave /= len(text)
     return text, score_ave
 
-  def predict(self, image_np, depth_frame, draw=False):
+  def predict(self, image_np, draw=False):
     # input data
     assert image_np.shape == (480, 640, 3)
     img_in = np.expand_dims(image_np, axis=0)
 
     # output data
     recognition_list = []
-    boxes_xyd = []
 
     # perform detection and recognition
     boxes, scores, number, ocr_boxes = self.session.run(self.rcnn_output, feed_dict={self.rcnn_input:img_in})
@@ -154,9 +153,8 @@ class ButtonRecognizer:
 
     for i in range(number):
         if scores[i] < 0.5: continue
-        center_x = (boxes[i][1] + boxes[i][3]) * 0.5 * self.image_size[1]
-        center_y = (boxes[i][0] + boxes[i][2]) * 0.5 * self.image_size[0]
-        depth = depth_frame.get_distance(int(center_x), int(center_y))
+        center_x = int((boxes[i][1] + boxes[i][3]) * 0.5 * self.image_size[1])
+        center_y = int((boxes[i][0] + boxes[i][2]) * 0.5 * self.image_size[0])
         if ocr_boxes.any():
 
             chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: ocr_boxes[:,i]})
@@ -164,15 +162,14 @@ class ButtonRecognizer:
             text, belief = self.decode_text(chars, beliefs)
         else:
             text, belief = '', 0.0
-        recognition_list.append([boxes[i], scores[i], text, belief, [center_x, center_y, depth]])
-    m_depth = depth_frame.get_distance(320, 240)
+        recognition_list.append([boxes[i], scores[i], text, belief, [center_x, center_y]])
 
     if draw:
       classes = [1]*len(boxes)
       self.draw_detection_result(image_np, boxes, classes, scores, self.category_index)
       self.draw_recognition_result(image_np, recognition_list)
 
-    return recognition_list, m_depth
+    return recognition_list
 
   @staticmethod
   def draw_detection_result(image_np, boxes, classes, scores, category, predict_chars=None):
@@ -216,7 +213,7 @@ class ButtonRecognizer:
 if __name__ == '__main__':
     recognizer = ButtonRecognizer(use_optimized=True)
     image = imageio.imread('./test_panels/1.jpg')
-    recognition_list, m_depth = recognizer.predict(image, True)
+    recognition_list = recognizer.predict(image, True)
     image = Image.fromarray(image)
     image.show()
     recognizer.clear_session()
