@@ -119,11 +119,10 @@ class ButtonRecognizer:
       self.rcnn_output = [rcnn_boxes, rcnn_scores, rcnn_number, ocr_boxes]
       self.ocr_input = ocr_input
       self.ocr_output = [ocr_chars, ocr_beliefs]
-    if self.use_tx2:
-      gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=3.0/8.0)
-      self.session = tf.compat.v1.Session(graph=ocr_rcnn_graph, config=tf.ConfigProto(gpu_options=gpu_options))
-    else:
-      self.session = tf.compat.v1.Session(graph=ocr_rcnn_graph)
+      
+      config = tf.compat.v1.ConfigProto()
+      config.gpu_options.allow_growth = True
+      self.session = tf.compat.v1.Session(graph=ocr_rcnn_graph, config=config)
 
   def clear_session(self):
     if self.session is not None:
