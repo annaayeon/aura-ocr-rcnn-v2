@@ -7,6 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 from utils.ops import native_crop_and_resize
 from utils import visualization_utils as vis_util
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.compat.v1.disable_eager_execution()
 
 charset = {'0': 0,  '1': 1,  '2': 2,  '3': 3,  '4': 4,  '5': 5,
