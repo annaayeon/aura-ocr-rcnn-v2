@@ -70,18 +70,19 @@ class BoxTFPublisher:
         return tf_point
 
     def send_transform(self, point, text):
-        t = TransformStamped()  
-        t.header.stamp = rospy.Time.now()                             
-        t.header.frame_id = self.frame_id                 
-        t.child_frame_id = 'button_'+text
-        t.transform.translation.x = point[0]
-        t.transform.translation.y = point[1]
-        t.transform.translation.z = point[2]
-        t.transform.rotation.x = 0.0
-        t.transform.rotation.y = 0.0
-        t.transform.rotation.z = 0.0
-        t.transform.rotation.w = 1.0
-        self.broadcaster.sendTransform(t)
+        if point[2] > 0 :
+            t = TransformStamped()  
+            t.header.stamp = rospy.Time.now()                             
+            t.header.frame_id = self.frame_id                 
+            t.child_frame_id = 'button_'+text
+            t.transform.translation.x = point[0]
+            t.transform.translation.y = point[1]
+            t.transform.translation.z = point[2]
+            t.transform.rotation.x = 0.0
+            t.transform.rotation.y = 0.0
+            t.transform.rotation.z = 0.0
+            t.transform.rotation.w = 1.0
+            self.broadcaster.sendTransform(t)
 
 
 if __name__ == '__main__':
