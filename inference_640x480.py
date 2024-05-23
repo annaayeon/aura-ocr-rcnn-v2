@@ -70,7 +70,7 @@ class BoxTFPublisher:
         return tf_point
 
     def send_transform(self, point, text):
-        if point[2] > 0 :
+        if 1 > point[2] > 0 :
             t = TransformStamped()  
             t.header.stamp = rospy.Time.now()                             
             t.header.frame_id = self.frame_id                 
