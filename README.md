@@ -10,15 +10,22 @@ This project utilizes the Intel RealSense Depth Camera D435i for real-time eleva
 
 OCR-RCNN-v2 is integrated with ROS (Robot Operating System) to publish the detected button locations. The detected button coordinates are published as `TransformStamped` messages in the `geometry_msgs.msg` format. This allows seamless communication with other ROS nodes, enabling comprehensive robot control and automation.
 
-## Requirements
+## Execution Environment
 
-To run OCR-RCNN-v2, ensure you have the following dependencies:
+These specifications were tested in the following environment:
 
-- **Operating System:** Ubuntu 20.04
-- **Python Version:** 3.8
+- **Operating System:** Ubuntu 20.04 LTS (x86_64)
+- **Graphics Card:** NVIDIA RTX2060
+- **Camera:** RealSense D435i
+- **Python:** 3.8
+- **CUDA Toolkit:** 11.0
+- **cuDNN:** 8.0.5
 - **Libraries:**
-  - TensorFlow 2.3.0
-  - Numpy 1.18.5
+    - TensorFlow: 2.4.0
+    - RealSense SDK: pyrealsense2   
+    - Numpy: 1.18.5
+    - OpenCV: 4.8.0.76
+    - Matplotlib: 3.1.2 
 
 ## Installation
 
