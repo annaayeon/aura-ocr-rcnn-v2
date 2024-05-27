@@ -91,8 +91,9 @@ class BoxTFPublisher:
         for recognition in recognition_list:
             text = recognition[2]
             pixel = recognition[4]
+            on = recognition[5]
             point = self.get_3d_coordinates(depth_frame, pixel, intrinsics)
-            self.send_transform(point, text)
+            self.send_transform(point, text, on)
             
     def get_3d_coordinates(self, depth_frame, pixel, intrinsics):
         u, v = pixel
@@ -104,12 +105,16 @@ class BoxTFPublisher:
 
         return tf_point
 
-    def send_transform(self, point, text):
-        if 1 > point[2] > 0:
+    def send_transform(self, point, text, on):
+        if 1 > point[0] > 0:
+            if on:
+                light = 'ON'
+            else:
+                light = 'OFF'
             t = TransformStamped()  
             t.header.stamp = rospy.Time.now()                             
             t.header.frame_id = self.frame_id                 
-            t.child_frame_id = 'button_' + text
+            t.child_frame_id = 'button_' + text + '_' + light
             t.transform.translation.x = point[0]
             t.transform.translation.y = point[1]
             t.transform.translation.z = point[2]
