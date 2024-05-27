@@ -35,6 +35,7 @@ For running on laptops and desktops (x86_64), follow these steps:
     pip install protobuf==3.19.6
     pip install pillow matplotlib lxml imageio --user
     pip install pyrealsense2
+    pip install opencv-python==4.8.0.76
     ```
 
 ## Inference
