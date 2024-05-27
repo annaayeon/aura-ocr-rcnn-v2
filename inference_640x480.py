@@ -105,7 +105,7 @@ class BoxTFPublisher:
             self.broadcaster.sendTransform(t)
 
 if __name__ == '__main__':
-    camera = RealSenseCamera(pub_pc=True)
+    camera = RealSenseCamera(pub_pc=False)
     recognizer = ButtonRecognizer(use_optimized=False)
     box_publisher = BoxTFPublisher()
     rate = rospy.Rate(10)
