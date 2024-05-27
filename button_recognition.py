@@ -4,6 +4,7 @@ import imageio
 import numpy as np
 import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
+import cv2
 from utils.ops import native_crop_and_resize
 from utils import visualization_utils as vis_util
 
@@ -96,22 +97,19 @@ class ButtonRecognizer:
       rcnn_scores = ocr_rcnn_graph.get_tensor_by_name('detection/detection_scores:0')
       rcnn_number = ocr_rcnn_graph.get_tensor_by_name('detection/num_detections:0')
 
-      # crop and resize valid boxes (only valid when rcnn input has an known shape)
+      # crop and resize valida boxes (only valid when rcnn input has an known shape)
       rcnn_number = tf.cast(rcnn_number, tf.int32)
       valid_boxes = tf.slice(rcnn_boxes, [0, 0, 0], [1, rcnn_number[0], 4])
 
       ocr_boxes = native_crop_and_resize(rcnn_input, valid_boxes, self.recognition_size)
 
-      # Increase R value of ocr_boxes images
-      red_ocr_boxes = tf.map_fn(lambda img: tf.concat([tf.clip_by_value(img[:,:,:,0:1] * 4, 0, 255), img[:,:,:,1:]], axis=-1), ocr_boxes)
-      
-      # retrieve recognition tensors
+      # retrive recognition tensors
       ocr_input = ocr_rcnn_graph.get_tensor_by_name('recognition/ocr_input:0')
       ocr_chars = ocr_rcnn_graph.get_tensor_by_name('recognition/predicted_chars:0')
       ocr_beliefs = ocr_rcnn_graph.get_tensor_by_name('recognition/predicted_scores:0')
 
       self.rcnn_input = rcnn_input
-      self.rcnn_output = [rcnn_boxes, rcnn_scores, rcnn_number, red_ocr_boxes]
+      self.rcnn_output = [rcnn_boxes, rcnn_scores, rcnn_number, ocr_boxes]
       self.ocr_input = ocr_input
       self.ocr_output = [ocr_chars, ocr_beliefs]
       
@@ -133,6 +131,27 @@ class ButtonRecognizer:
     score_ave /= len(text)
     return text, score_ave
 
+  def check_hsv_color(self, image):
+    hsv_lower = np.array([100, 200, 200])
+    hsv_upper = np.array([150, 250, 250])
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    center_x, center_y = hsv_image.shape[1] // 2, hsv_image.shape[0] // 2
+    center_hsv = hsv_image[center_y, center_x]
+    mask = cv2.inRange(hsv_image, hsv_lower, hsv_upper)
+    # filtered_image = cv2.bitwise_and(image, image, mask=mask)
+    # cv2.imshow('Filtered HSV Image', filtered_image)
+    return np.any(mask)
+  
+  def preprocess_ocr_input(self, image):
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    hsv_image[:,:,2] = 150
+    processed_image = cv2.cvtColor(hsv_image, cv2.COLOR_HSV2RGB)  # Convert back to RGB
+    processed_image = cv2.resize(processed_image, (180, 180))  # Resize to (180, 180)
+    cv2.imshow('img', processed_image)
+    
+    processed_image = np.expand_dims(processed_image, axis=0)  # Add batch dimension
+    return processed_image
+
   def predict(self, image_np, draw=False):
     # input data
     assert image_np.shape == (480, 640, 3)
@@ -142,24 +161,31 @@ class ButtonRecognizer:
     recognition_list = []
 
     # perform detection and recognition
-    boxes, scores, number, ocr_boxes = self.session.run(self.rcnn_output, feed_dict={self.rcnn_input:img_in})
+    boxes, scores, number, ocr_boxes = self.session.run(self.rcnn_output, feed_dict={self.rcnn_input: img_in})
     boxes, scores, number = [np.squeeze(x) for x in [boxes, scores, number]]
 
     for i in range(number):
-        if scores[i] < 0.5: continue
-        center_x = int((boxes[i][1] + boxes[i][3]) * 0.5 * self.image_size[1])
-        center_y = int((boxes[i][0] + boxes[i][2]) * 0.5 * self.image_size[0])
-        if ocr_boxes.any():
+      if scores[i] < 0.5: continue
+      center_x = int((boxes[i][1] + boxes[i][3]) * 0.5 * self.image_size[1])
+      center_y = int((boxes[i][0] + boxes[i][2]) * 0.5 * self.image_size[0])
+      if ocr_boxes.any():
+        ocr_box_image = image_np[int(boxes[i][0] * 480):int(boxes[i][2] * 480),
+                        int(boxes[i][1] * 640):int(boxes[i][3] * 640)]
+        processed_ocr_box_image = self.preprocess_ocr_input(ocr_box_image)  # Preprocess the OCR input image
 
-            chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: ocr_boxes[:,i]})
-            chars, beliefs = [np.squeeze(x) for x in [chars, beliefs]]
-            text, belief = self.decode_text(chars, beliefs)
-        else:
-            text, belief = '', 0.0
-        recognition_list.append([boxes[i], scores[i], text, belief, [center_x, center_y]])
-
+        chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: processed_ocr_box_image})
+        chars, beliefs = [np.squeeze(x) for x in [chars, beliefs]]
+        text, belief = self.decode_text(chars, beliefs)
+        if text == '7':
+          text = ')'
+        # Check HSV color range in ocr_box
+        color_flag = self.check_hsv_color(ocr_box_image)
+      else:
+        text, belief = '', 0.0
+        color_flag = False
+      recognition_list.append([boxes[i], scores[i], text, belief, [center_x, center_y], color_flag])
     if draw:
-      classes = [1]*len(boxes)
+      classes = [1] * len(boxes)
       self.draw_detection_result(image_np, boxes, classes, scores, self.category_index)
       self.draw_recognition_result(image_np, recognition_list)
 
