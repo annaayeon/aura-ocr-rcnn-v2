@@ -13,7 +13,7 @@ DRAW = True
 # DRAW = False
 
 class RealSenseCamera:
-    def __init__(self, width=640, height=480, fps=30):
+    def __init__(self, width=640, height=480, fps=30, pub_pc=False):
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
@@ -23,6 +23,10 @@ class RealSenseCamera:
         self.intrinsics = depth_profile.get_intrinsics()
         self.pointcloud = rs.pointcloud()
         self.colorizer = rs.colorizer()
+        self.pub_pc = pub_pc
+        if self.pub_pc:   
+            self.pointcloud_pub = rospy.Publisher('pointcloud', PointCloud2, queue_size=10)
+            self.frame_id = 'camera_frame'
 
     def get_frames(self):
         frames = self.pipeline.wait_for_frames()
@@ -33,22 +37,39 @@ class RealSenseCamera:
         color_image = np.asanyarray(color_frame.get_data())
         return depth_frame, color_frame, color_image
 
-    def create_pointcloud(self, depth_frame, color_frame):
+    def stop(self):
+        self.pipeline.stop()
+
+    def publish_pointcloud(self, depth_frame, color_frame):
         points = self.pointcloud.calculate(depth_frame)
         self.pointcloud.map_to(color_frame)
         verts = np.asanyarray(points.get_vertices()).view(np.float32).reshape(-1, 3)
-        texcoords = np.asanyarray(points.get_texture_coordinates()).view(np.float32).reshape(-1, 2)
         colors = np.asanyarray(color_frame.get_data()).reshape(-1, 3)
-        return verts, texcoords, colors
+    
+        header = rospy.Header()
+        header.stamp = rospy.Time.now()
+        header.frame_id = self.frame_id
+        points_list = []
+        for i in range(len(verts)):
+            x, y, z = verts[i]
+            r, g, b = colors[i]
+            rgb = (int(r) << 16) | (int(g) << 8) | int(b)
+            points_list.append([x, y, z, rgb])
+        
+        fields = [
+            PointField('x', 0, PointField.FLOAT32, 1),
+            PointField('y', 4, PointField.FLOAT32, 1),
+            PointField('z', 8, PointField.FLOAT32, 1),
+            PointField('rgb', 12, PointField.UINT32, 1)
+        ]
 
-    def stop(self):
-        self.pipeline.stop()
+        pc2_msg = pc2.create_cloud(header, fields, points_list)
+        self.pointcloud_pub.publish(pc2_msg)
 
 class BoxTFPublisher:
     def __init__(self):
         rospy.init_node('bounding_box_tf_publisher')
         self.broadcaster = tf2_ros.TransformBroadcaster()
-        self.pointcloud_pub = rospy.Publisher('pointcloud', PointCloud2, queue_size=10)
         self.frame_id = 'camera_frame' 
 
     def publish_transforms(self, recognition_list, depth_frame, intrinsics):
@@ -69,7 +90,7 @@ class BoxTFPublisher:
         return tf_point
 
     def send_transform(self, point, text):
-        if 1 > point[2] > 0 :
+        if 1 > point[2] > 0:
             t = TransformStamped()  
             t.header.stamp = rospy.Time.now()                             
             t.header.frame_id = self.frame_id                 
@@ -82,30 +103,9 @@ class BoxTFPublisher:
             t.transform.rotation.z = 0.0
             t.transform.rotation.w = 1.0
             self.broadcaster.sendTransform(t)
-        
-    def publish_pointcloud(self, verts, colors):
-        header = rospy.Header()
-        header.stamp = rospy.Time.now()
-        header.frame_id = self.frame_id
-        points = []
-        for i in range(len(verts)):
-            x, y, z = verts[i]
-            r, g, b = colors[i]
-            rgb = (int(r) << 16) | (int(g) << 8) | int(b)
-            points.append([x, y, z, rgb])
-        
-        fields = [
-            PointField('x', 0, PointField.FLOAT32, 1),
-            PointField('y', 4, PointField.FLOAT32, 1),
-            PointField('z', 8, PointField.FLOAT32, 1),
-            PointField('rgb', 12, PointField.UINT32, 1)
-        ]
-
-        pc2_msg = pc2.create_cloud(header, fields, points)
-        self.pointcloud_pub.publish(pc2_msg)
 
 if __name__ == '__main__':
-    camera = RealSenseCamera()
+    camera = RealSenseCamera(pub_pc=True)
     recognizer = ButtonRecognizer(use_optimized=False)
     box_publisher = BoxTFPublisher()
     rate = rospy.Rate(10)
@@ -125,10 +125,8 @@ if __name__ == '__main__':
             print('FPS :', fps)
 
             box_publisher.publish_transforms(recognition_list, depth_frame, camera.intrinsics)
-
-            verts, texcoords, colors = camera.create_pointcloud(depth_frame, color_frame)
-            box_publisher.publish_pointcloud(verts, colors)
-
+            if camera.pub_pc:
+                camera.publish_pointcloud(depth_frame, color_frame)
             if DRAW:
                 cv2.imshow('Button Recognition', color_image)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
