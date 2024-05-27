@@ -106,7 +106,7 @@ class BoxTFPublisher:
 
 if __name__ == '__main__':
     camera = RealSenseCamera()
-    recognizer = ButtonRecognizer(use_optimized=True)
+    recognizer = ButtonRecognizer(use_optimized=False)
     box_publisher = BoxTFPublisher()
     rate = rospy.Rate(10)
 

@@ -212,7 +212,7 @@ class ButtonRecognizer:
 
 
 if __name__ == '__main__':
-    recognizer = ButtonRecognizer(use_optimized=True)
+    recognizer = ButtonRecognizer(use_optimized=False)
     image = imageio.imread('./test_panels/1.jpg')
     recognition_list = recognizer.predict(image, True)
     image = Image.fromarray(image)
