@@ -7,6 +7,7 @@ from sensor_msgs.msg import PointCloud2, PointField
 from geometry_msgs.msg import TransformStamped
 import sensor_msgs.point_cloud2 as pc2
 import pyrealsense2 as rs
+import struct
 from button_recognition import ButtonRecognizer
 
 DRAW = True
@@ -44,17 +45,30 @@ class RealSenseCamera:
     def publish_pointcloud(self, depth_frame, color_frame):
         points = self.pointcloud.calculate(depth_frame)
         self.pointcloud.map_to(color_frame)
+
+        # Get vertices and texture coordinates
         verts = np.asanyarray(points.get_vertices()).view(np.float32).reshape(-1, 3)
-        colors = np.asanyarray(color_frame.get_data()).reshape(-1, 3)
-    
+        texcoords = np.asanyarray(points.get_texture_coordinates()).view(np.float32).reshape(-1, 2)
+        colors = np.asanyarray(color_frame.get_data())
+
         header = rospy.Header()
         header.stamp = rospy.Time.now()
         header.frame_id = self.frame_id
+
+        h, w, _ = colors.shape
+
+        # Convert texcoords to pixel indices
+        texcoords[:, 0] = np.clip(texcoords[:, 0] * w + 0.5, 0, w - 1)
+        texcoords[:, 1] = np.clip(texcoords[:, 1] * h + 0.5, 0, h - 1)
+        texcoords = texcoords.astype(np.int32)
+
+        # Prepare point cloud data
         points_list = []
         for i in range(len(verts)):
             x, y, z = verts[i]
-            r, g, b = colors[i]
-            rgb = (int(r) << 16) | (int(g) << 8) | int(b)
+            u, v = texcoords[i]
+            r, g, b = colors[v, u]
+            rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, 0))[0]
             points_list.append([x, y, z, rgb])
         
         fields = [
@@ -106,13 +120,14 @@ class BoxTFPublisher:
             self.broadcaster.sendTransform(t)
 
 if __name__ == '__main__':
-    camera = RealSenseCamera(pub_pc=False)
+    camera = RealSenseCamera(pub_pc=True)
     recognizer = ButtonRecognizer(use_optimized=False)
     box_publisher = BoxTFPublisher()
     rate = rospy.Rate(10)
 
     try:
         while not rospy.is_shutdown():
+            T0 = cv2.getTickCount()
             depth_frame, depth_image, color_frame, color_image = camera.get_frames()
             if depth_frame is None or depth_image is None or color_image is None:
                 continue
@@ -126,11 +141,61 @@ if __name__ == '__main__':
             t1 = cv2.getTickCount()
             time = (t1 - t0) / cv2.getTickFrequency()
             fps = 1.0 / time
-            print('FPS :', fps)
+            print('recognition FPS :', fps)
 
             box_publisher.publish_transforms(recognition_list, depth_frame, camera.intrinsics)
             if camera.pub_pc:
                 camera.publish_pointcloud(depth_frame, color_frame)
+
+            T1 = cv2.getTickCount()
+            Time = (T1 - T0) / cv2.getTickFrequency()
+            FPS = 1.0 / Time
+            print('frame+recog+pub FPS :', FPS)
+            if DRAW:
+                cv2.imshow('Button Recognition', color_image)
+                cv2.imshow('Depth Frame', depth_colormap)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+                
+    except rospy.ROSInterruptException:
+        pass
+    finally:
+        camera.stop()
+        recognizer.clear_session()
+        cv2.destroyAllWindows()
+        
+if __name__ == '__main__':
+    camera = RealSenseCamera(pub_pc=True)
+    recognizer = ButtonRecognizer(use_optimized=False)
+    box_publisher = BoxTFPublisher()
+    rate = rospy.Rate(10)
+
+    try:
+        while not rospy.is_shutdown():
+            T0 = cv2.getTickCount()
+            depth_frame, depth_image, color_frame, color_image = camera.get_frames()
+            if depth_frame is None or depth_image is None or color_image is None:
+                continue
+
+            # Colorize depth image for visualization
+            depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+
+            # Perform button recognition
+            t0 = cv2.getTickCount()
+            recognition_list = recognizer.predict(color_image, draw=DRAW)
+            t1 = cv2.getTickCount()
+            time = (t1 - t0) / cv2.getTickFrequency()
+            fps = 1.0 / time
+            print('recognition FPS :', fps)
+
+            box_publisher.publish_transforms(recognition_list, depth_frame, camera.intrinsics)
+            if camera.pub_pc:
+                camera.publish_pointcloud(depth_frame, color_frame)
+
+            T1 = cv2.getTickCount()
+            Time = (T1 - T0) / cv2.getTickFrequency()
+            FPS = 1.0 / Time
+            # print('frame+recog+pub FPS :', FPS)
             if DRAW:
                 cv2.imshow('Button Recognition', color_image)
                 cv2.imshow('Depth Frame', depth_colormap)
