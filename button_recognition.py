@@ -9,6 +9,7 @@ from utils import visualization_utils as vis_util
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.compat.v1.disable_eager_execution()
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # CPU 사용
 
 charset = {'0': 0,  '1': 1,  '2': 2,  '3': 3,  '4': 4,  '5': 5,
            '6': 6,  '7': 7,  '8': 8,  '9': 9,  'A': 10, 'B': 11,
@@ -71,8 +72,8 @@ class ButtonRecognizer:
     if self.rcnn_graph_path is None:
       self.rcnn_graph_path = './frozen_model/detection_graph_640x480.pb'
     if self.use_optimized:
-      self.ocr_graph_path.replace('.pb', '_optimized.pb')
-      self.rcnn_graph_path.replace('.pb', '_optimized.pb')
+      self.ocr_graph_path = self.ocr_graph_path.replace('.pb', '_optimized.pb')
+      self.rcnn_graph_path = self.rcnn_graph_path.replace('.pb', '_optimized.pb')
     assert os.path.exists(self.ocr_graph_path) and os.path.exists(self.rcnn_graph_path)
 
     # merge the frozen graphs
