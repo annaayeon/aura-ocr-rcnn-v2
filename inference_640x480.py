@@ -11,7 +11,7 @@ import struct
 from button_recognition import ButtonRecognizer
 
 DRAW = True
-# DRAW = False
+depth_DRAW = False
 
 class RealSenseCamera:
     def __init__(self, width=640, height=480, fps=30, pub_pc=False):
@@ -120,14 +120,13 @@ class BoxTFPublisher:
             self.broadcaster.sendTransform(t)
 
 if __name__ == '__main__':
-    camera = RealSenseCamera(pub_pc=True)
+    camera = RealSenseCamera(pub_pc=False)
     recognizer = ButtonRecognizer(use_optimized=False)
     box_publisher = BoxTFPublisher()
     rate = rospy.Rate(10)
 
     try:
         while not rospy.is_shutdown():
-            T0 = cv2.getTickCount()
             depth_frame, depth_image, color_frame, color_image = camera.get_frames()
             if depth_frame is None or depth_image is None or color_image is None:
                 continue
@@ -147,13 +146,10 @@ if __name__ == '__main__':
             if camera.pub_pc:
                 camera.publish_pointcloud(depth_frame, color_frame)
 
-            T1 = cv2.getTickCount()
-            Time = (T1 - T0) / cv2.getTickFrequency()
-            FPS = 1.0 / Time
-            print('frame+recog+pub FPS :', FPS)
             if DRAW:
                 cv2.imshow('Button Recognition', color_image)
-                cv2.imshow('Depth Frame', depth_colormap)
+                if depth_DRAW:
+                    cv2.imshow('Depth Frame', depth_colormap)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
                 
@@ -163,48 +159,4 @@ if __name__ == '__main__':
         camera.stop()
         recognizer.clear_session()
         cv2.destroyAllWindows()
-        
-if __name__ == '__main__':
-    camera = RealSenseCamera(pub_pc=True)
-    recognizer = ButtonRecognizer(use_optimized=False)
-    box_publisher = BoxTFPublisher()
-    rate = rospy.Rate(10)
-
-    try:
-        while not rospy.is_shutdown():
-            T0 = cv2.getTickCount()
-            depth_frame, depth_image, color_frame, color_image = camera.get_frames()
-            if depth_frame is None or depth_image is None or color_image is None:
-                continue
-
-            # Colorize depth image for visualization
-            depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
-
-            # Perform button recognition
-            t0 = cv2.getTickCount()
-            recognition_list = recognizer.predict(color_image, draw=DRAW)
-            t1 = cv2.getTickCount()
-            time = (t1 - t0) / cv2.getTickFrequency()
-            fps = 1.0 / time
-            print('recognition FPS :', fps)
-
-            box_publisher.publish_transforms(recognition_list, depth_frame, camera.intrinsics)
-            if camera.pub_pc:
-                camera.publish_pointcloud(depth_frame, color_frame)
-
-            T1 = cv2.getTickCount()
-            Time = (T1 - T0) / cv2.getTickFrequency()
-            FPS = 1.0 / Time
-            # print('frame+recog+pub FPS :', FPS)
-            if DRAW:
-                cv2.imshow('Button Recognition', color_image)
-                cv2.imshow('Depth Frame', depth_colormap)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-                
-    except rospy.ROSInterruptException:
-        pass
-    finally:
-        camera.stop()
-        recognizer.clear_session()
-        cv2.destroyAllWindows()
+      
