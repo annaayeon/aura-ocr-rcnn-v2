@@ -133,7 +133,10 @@ class ButtonRecognizer:
 
   def predict(self, images_np, draw=False):
     # input data
-    assert images_np.shape == (self.batch_size, 480, 640, 3)
+    if images_np.ndim == 3:
+        images_np = np.expand_dims(images_np, axis=0)
+    assert images_np.shape == (self.batch_size, 480, 640, 3), f"Expected shape ({self.batch_size}, 480, 640, 3), got {images_np.shape}"
+
     img_in = images_np
 
     # output data
@@ -145,7 +148,7 @@ class ButtonRecognizer:
         batch_boxes = boxes[b]
         batch_scores = scores[b]
         batch_number = number[b]
-        for i in range(batch_number):
+        for i in range(int(batch_number)):
             if batch_scores[i] < 0.5:
                 continue
             center_x = int((batch_boxes[i][1] + batch_boxes[i][3]) * 0.5 * self.image_size[1])
