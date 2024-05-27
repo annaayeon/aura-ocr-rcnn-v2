@@ -21,15 +21,11 @@ charset = {'0': 0,  '1': 1,  '2': 2,  '3': 3,  '4': 4,  '5': 5,
            '*': 42, '%': 43, '?': 44, '!': 45, '+': 46} # <nul> = +
 
 class ButtonRecognizer:
-  def __init__(self, rcnn_path= None, ocr_path=None,
-               use_trt=False, precision='FP16', use_optimized=False,
-               use_tx2=False):
+  def __init__(self, rcnn_path= None, ocr_path=None, precision='FP16', use_optimized=False):
     self.ocr_graph_path = ocr_path
     self.rcnn_graph_path = rcnn_path
-    self.use_trt = use_trt
     self.precision=precision  #'INT8, FP16, FP32'
     self.use_optimized = use_optimized
-    self.use_tx2 = use_tx2 # if use tx2, gpu memory is limited to 3GB
     self.session = None
 
     self.ocr_input = None
@@ -85,10 +81,6 @@ class ButtonRecognizer:
         detection_graph_def = tf.compat.v1.GraphDef()
         serialized_graph = fid.read()
         detection_graph_def.ParseFromString(serialized_graph)
-        # for node in detection_graph_def.node:
-        #   print node.name
-        if self.use_trt:
-          detection_graph_def = self.optimize_rcnn(detection_graph_def)
         tf.import_graph_def(detection_graph_def, name='detection')
 
       # load character recognition graph definition
@@ -96,8 +88,6 @@ class ButtonRecognizer:
         recognition_graph_def = tf.compat.v1.GraphDef()
         serialized_graph = fid.read()
         recognition_graph_def.ParseFromString(serialized_graph)
-        if self.use_trt:
-          recognition_graph_def = self.optimize_ocr(recognition_graph_def)
         tf.import_graph_def(recognition_graph_def, name='recognition')
 
       # retrive detection tensors
