@@ -96,19 +96,22 @@ class ButtonRecognizer:
       rcnn_scores = ocr_rcnn_graph.get_tensor_by_name('detection/detection_scores:0')
       rcnn_number = ocr_rcnn_graph.get_tensor_by_name('detection/num_detections:0')
 
-      # crop and resize valida boxes (only valid when rcnn input has an known shape)
+      # crop and resize valid boxes (only valid when rcnn input has an known shape)
       rcnn_number = tf.cast(rcnn_number, tf.int32)
       valid_boxes = tf.slice(rcnn_boxes, [0, 0, 0], [1, rcnn_number[0], 4])
 
       ocr_boxes = native_crop_and_resize(rcnn_input, valid_boxes, self.recognition_size)
 
-      # retrive recognition tensors
+      # Increase R value of ocr_boxes images
+      red_ocr_boxes = tf.map_fn(lambda img: tf.concat([tf.clip_by_value(img[:,:,:,0:1] * 4, 0, 255), img[:,:,:,1:]], axis=-1), ocr_boxes)
+      
+      # retrieve recognition tensors
       ocr_input = ocr_rcnn_graph.get_tensor_by_name('recognition/ocr_input:0')
       ocr_chars = ocr_rcnn_graph.get_tensor_by_name('recognition/predicted_chars:0')
       ocr_beliefs = ocr_rcnn_graph.get_tensor_by_name('recognition/predicted_scores:0')
 
       self.rcnn_input = rcnn_input
-      self.rcnn_output = [rcnn_boxes, rcnn_scores, rcnn_number, ocr_boxes]
+      self.rcnn_output = [rcnn_boxes, rcnn_scores, rcnn_number, red_ocr_boxes]
       self.ocr_input = ocr_input
       self.ocr_output = [ocr_chars, ocr_beliefs]
       
