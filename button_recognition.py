@@ -131,25 +131,20 @@ class ButtonRecognizer:
     score_ave /= len(text)
     return text, score_ave
 
-  def check_hsv_color(self, image):
+  def check_on_off(self, image):
+    # 1 : ON , 2 : OFF
     hsv_lower = np.array([100, 200, 200])
     hsv_upper = np.array([150, 250, 250])
     hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    center_x, center_y = hsv_image.shape[1] // 2, hsv_image.shape[0] // 2
-    center_hsv = hsv_image[center_y, center_x]
     mask = cv2.inRange(hsv_image, hsv_lower, hsv_upper)
-    # filtered_image = cv2.bitwise_and(image, image, mask=mask)
-    # cv2.imshow('Filtered HSV Image', filtered_image)
     return np.any(mask)
   
   def preprocess_ocr_input(self, image):
     hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
     hsv_image[:,:,2] = 150
-    processed_image = cv2.cvtColor(hsv_image, cv2.COLOR_HSV2RGB)  # Convert back to RGB
-    processed_image = cv2.resize(processed_image, (180, 180))  # Resize to (180, 180)
-    cv2.imshow('img', processed_image)
-    
-    processed_image = np.expand_dims(processed_image, axis=0)  # Add batch dimension
+    processed_image = cv2.cvtColor(hsv_image, cv2.COLOR_HSV2RGB) 
+    processed_image = cv2.resize(processed_image, (180, 180))
+    processed_image = np.expand_dims(processed_image, axis=0)
     return processed_image
 
   def predict(self, image_np, draw=False):
@@ -171,15 +166,13 @@ class ButtonRecognizer:
       if ocr_boxes.any():
         ocr_box_image = image_np[int(boxes[i][0] * 480):int(boxes[i][2] * 480),
                         int(boxes[i][1] * 640):int(boxes[i][3] * 640)]
-        processed_ocr_box_image = self.preprocess_ocr_input(ocr_box_image)  # Preprocess the OCR input image
-
+        processed_ocr_box_image = self.preprocess_ocr_input(ocr_box_image)
         chars, beliefs = self.session.run(self.ocr_output, feed_dict={self.ocr_input: processed_ocr_box_image})
         chars, beliefs = [np.squeeze(x) for x in [chars, beliefs]]
         text, belief = self.decode_text(chars, beliefs)
         if text == '7':
           text = ')'
-        # Check HSV color range in ocr_box
-        color_flag = self.check_hsv_color(ocr_box_image)
+        color_flag = self.check_on_off(ocr_box_image)
       else:
         text, belief = '', 0.0
         color_flag = False
@@ -222,11 +215,10 @@ class ButtonRecognizer:
       font_size = min(x_center, y_center)*1.1
       text_center = int(x_center-0.5*font_size), int(y_center-0.5*font_size)
       try:
-          font = ImageFont.truetype('/Library/Fonts/Arial.ttf', int(font_size))  # 변경 가능한 폰트 경로
+          font = ImageFont.truetype('/Library/Fonts/Arial.ttf', int(font_size))
       except IOError:
           font = ImageFont.load_default() 
       img_show.text(text_center, text=item[2], font=font, fill=(255, 0, 255))
-      # img_pil.show()
       image_np[y_min: y_max, x_min: x_max] = np.array(img_pil)
 
 
