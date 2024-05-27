@@ -35,7 +35,8 @@ class RealSenseCamera:
         if not depth_frame or not color_frame:
             return None, None, None
         color_image = np.asanyarray(color_frame.get_data())
-        return depth_frame, color_frame, color_image
+        depth_image = np.asanyarray(depth_frame.get_data())
+        return depth_frame, depth_image, color_frame, color_image
 
     def stop(self):
         self.pipeline.stop()
@@ -112,9 +113,12 @@ if __name__ == '__main__':
 
     try:
         while not rospy.is_shutdown():
-            depth_frame, color_frame, color_image = camera.get_frames()
-            if depth_frame is None or color_frame is None or color_image is None:
+            depth_frame, depth_image, color_frame, color_image = camera.get_frames()
+            if depth_frame is None or depth_image is None or color_image is None:
                 continue
+
+            # Colorize depth image for visualization
+            depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
 
             # perform button recognition
             t0 = cv2.getTickCount()
@@ -129,6 +133,7 @@ if __name__ == '__main__':
                 camera.publish_pointcloud(depth_frame, color_frame)
             if DRAW:
                 cv2.imshow('Button Recognition', color_image)
+                cv2.imshow('Depth Frame', depth_colormap)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
                 
