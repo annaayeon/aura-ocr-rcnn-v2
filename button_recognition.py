@@ -132,7 +132,7 @@ class ButtonRecognizer:
     return text, score_ave
 
   def check_on_off(self, image):
-    # 1 : ON , 2 : OFF
+    # 1 : ON , 0 : OFF
     hsv_lower = np.array([100, 200, 200])
     hsv_upper = np.array([150, 250, 250])
     hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)

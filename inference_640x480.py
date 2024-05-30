@@ -9,6 +9,7 @@ import sensor_msgs.point_cloud2 as pc2
 import pyrealsense2 as rs
 import struct
 from button_recognition import ButtonRecognizer
+import math
 
 DRAW = True
 depth_DRAW = False
@@ -92,7 +93,8 @@ class BoxTFPublisher:
             text = recognition[2]
             pixel = recognition[4]
             on = recognition[5]
-            point = self.get_3d_coordinates(depth_frame, pixel, intrinsics)
+            # point = self.get_3d_coordinates(depth_frame, pixel, intrinsics)
+            point = self.calculate_transform(depth_frame, pixel)
             self.send_transform(point, text, on)
             
     def get_3d_coordinates(self, depth_frame, pixel, intrinsics):
@@ -104,6 +106,36 @@ class BoxTFPublisher:
         tf_point = [point[2], -point[0], -point[1]]
 
         return tf_point
+
+    def calculate_transform(self, depth_frame, pixel):
+      center_x, center_y = pixel
+      m_depth = depth_frame.get_distance(320, 240)
+      depth = depth_frame.get_distance(center_x, center_y)
+      mx = 320
+      my = 240
+      
+      pixel_y = center_x - mx
+      if pixel_y < 0:
+        pixel_y = -pixel_y
+      pixel_z = center_y - my
+      if pixel_z < 0:
+        pixel_z = -pixel_z
+      
+      if depth**2 < m_depth**2:
+        yz_distance = math.sqrt(m_depth**2 - depth**2)
+      else:
+        yz_distance = math.sqrt(depth**2 - m_depth**2)  # yz 평면 상 거리
+      yz_pixel = math.sqrt(pixel_y**2 + pixel_z**2) # yz 평면 상 픽셀 거리
+      scale_yz = yz_distance / yz_pixel if yz_pixel != 0 else 0
+    
+
+      tf_y = pixel_y * scale_yz
+      tf_z = pixel_z * scale_yz
+
+      point = [depth, tf_y, tf_z]
+
+      return point
+
 
     def send_transform(self, point, text, on):
         if 1 > point[0] > 0:
