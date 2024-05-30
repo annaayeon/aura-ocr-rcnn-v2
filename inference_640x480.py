@@ -115,11 +115,7 @@ class BoxTFPublisher:
       my = 240
       
       pixel_y = center_x - mx
-      if pixel_y < 0:
-        pixel_y = -pixel_y
       pixel_z = center_y - my
-      if pixel_z < 0:
-        pixel_z = -pixel_z
       
       if depth**2 < m_depth**2:
         yz_distance = math.sqrt(m_depth**2 - depth**2)
