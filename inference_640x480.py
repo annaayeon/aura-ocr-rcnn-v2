@@ -95,6 +95,7 @@ class BoxTFPublisher:
 
     def publish_transforms(self, recognition_list, depth_frame, intrinsics):
         for recognition in recognition_list:
+            box = recognition[0]
             text = recognition[2]
             pixel = recognition[4]
             on = recognition[5]
@@ -117,53 +118,48 @@ class BoxTFPublisher:
         return tf_point
 
     def calculate_transform(self, depth_frame, pixel):
-      center_x, center_y = pixel
-      m_depth = depth_frame.get_distance(320, 240)
-      depth = depth_frame.get_distance(center_x, center_y)
-      mx = 320
-      my = 240
-      
-      pixel_y = center_x - mx
-      if pixel_y < 0:
-        pixel_y = -pixel_y
-      pixel_z = center_y - my
-      if pixel_z < 0:
-        pixel_z = -pixel_z
-      
-      if depth**2 < m_depth**2:
-        yz_distance = math.sqrt(m_depth**2 - depth**2)
-      else:
-        yz_distance = math.sqrt(depth**2 - m_depth**2)  # yz 평면 상 거리
-      yz_pixel = math.sqrt(pixel_y**2 + pixel_z**2) # yz 평면 상 픽셀 거리
-      scale_yz = yz_distance / yz_pixel if yz_pixel != 0 else 0
-    
+        center_x, center_y = pixel
+        m_depth = depth_frame.get_distance(320, 240)
+        depth = depth_frame.get_distance(center_x, center_y)
+        mx = 320
+        my = 240
+        
+        pixel_y = center_x - mx
+        if pixel_y < 0:
+            pixel_y = -pixel_y
+        pixel_z = center_y - my
+        if pixel_z < 0:
+            pixel_z = -pixel_z
+        
+        if depth**2 < m_depth**2:
+            yz_distance = math.sqrt(m_depth**2 - depth**2)
+        else:
+            yz_distance = math.sqrt(depth**2 - m_depth**2)  # yz 평면 상 거리
+        yz_pixel = math.sqrt(pixel_y**2 + pixel_z**2) # yz 평면 상 픽셀 거리
+        scale_yz = yz_distance / yz_pixel if yz_pixel != 0 else 0
+        
 
-      tf_y = pixel_y * scale_yz
-      tf_z = pixel_z * scale_yz
+        tf_y = pixel_y * scale_yz
+        tf_z = pixel_z * scale_yz
 
-      point = [depth, tf_y, tf_z]
+        point = [depth, tf_y, tf_z]
 
-      return point
-
+        return point
 
     def send_transform(self, point, text, on):
-        if 0.5 > point[0] > 0:
-            if on:
-                light = 'ON'
-            else:
-                light = 'OFF'
-            t = TransformStamped()  
-            t.header.stamp = rospy.Time.now()                             
-            t.header.frame_id = self.frame_id                 
-            t.child_frame_id = 'button_' + text + '_' + light
-            t.transform.translation.x = point[0]
-            t.transform.translation.y = point[1]
-            t.transform.translation.z = point[2]
-            t.transform.rotation.x = 0.0
-            t.transform.rotation.y = 0.0
-            t.transform.rotation.z = 0.0
-            t.transform.rotation.w = 1.0
-            self.broadcaster.sendTransform(t)
+        light = 'ON' if on else 'OFF'
+        t = TransformStamped()  
+        t.header.stamp = rospy.Time.now()                             
+        t.header.frame_id = self.frame_id                 
+        t.child_frame_id = 'button_' + text + '_' + light
+        t.transform.translation.x = point[0]
+        t.transform.translation.y = point[1]
+        t.transform.translation.z = point[2]
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 1.0
+        self.broadcaster.sendTransform(t)
 
 if __name__ == '__main__':
     camera = RealSenseCamera(pub_pc=False)
