@@ -91,18 +91,46 @@ class BoxTFPublisher:
     def __init__(self):
         rospy.init_node('bounding_box_tf_publisher')
         self.broadcaster = tf2_ros.TransformBroadcaster()
-        self.frame_id = 'camera_frame' 
+        self.frame_id = 'camera_frame'
+        self.tf_translation_x_vals = []
+        self.tf_translation_y_vals = []
+        self.tf_translation_z_vals = []
+        self.data_count = 0
+        self.data_limit = 20  #
 
     def publish_transforms(self, recognition_list, depth_frame, intrinsics):
         for recognition in recognition_list:
             text = recognition[2]
             pixel = recognition[4]
             on = recognition[5]
-            point = self.get_3d_coordinates(depth_frame, pixel, intrinsics) # realsense
-            # point = self.calculate_transform(depth_frame, pixel)  # ay
-            self.send_transform(point, text, on)
-            
-    def get_3d_coordinates(self, depth_frame, pixel, intrinsics, window_size=3):
+            point = self.get_3d_coordinates(depth_frame, pixel, intrinsics)
+            self.tf_translation_x_vals.append(point[0])
+            self.tf_translation_y_vals.append(point[1])
+            self.tf_translation_z_vals.append(point[2])
+            self.data_count += 1
+
+            if self.data_count < self.data_limit:
+                continue
+
+            filtered_tf_translation_x = self.remove_outliers(self.tf_translation_x_vals)
+            filtered_tf_translation_y = self.remove_outliers(self.tf_translation_y_vals)
+            filtered_tf_translation_z = self.remove_outliers(self.tf_translation_z_vals)
+
+            if len(filtered_tf_translation_x) < self.data_limit:
+                continue
+
+            avg_x = np.mean(filtered_tf_translation_x)
+            avg_y = np.mean(filtered_tf_translation_y)
+            avg_z = np.mean(filtered_tf_translation_z)
+
+            self.tf_translation_x_vals.clear()
+            self.tf_translation_y_vals.clear()
+            self.tf_translation_z_vals.clear()
+            self.data_count = 0
+
+            self.send_transform([avg_x, avg_y, avg_z], text, on)
+
+    def get_3d_coordinates(self, depth_frame, pixel, intrinsics, window_size=10):
         u, v = pixel
         depth_values = []
         offset = window_size // 2
@@ -128,35 +156,16 @@ class BoxTFPublisher:
         '''
         return [point[2], -point[0], -point[1]]
 
-
-    def calculate_transform(self, depth_frame, pixel):
-        center_x, center_y = pixel
-        m_depth = depth_frame.get_distance(320, 240)
-        depth = depth_frame.get_distance(center_x, center_y)
-        mx = 320
-        my = 240
-        
-        pixel_y = center_x - mx
-        if pixel_y < 0:
-            pixel_y = -pixel_y
-        pixel_z = center_y - my
-        if pixel_z < 0:
-            pixel_z = -pixel_z
-        
-        if depth**2 < m_depth**2:
-            yz_distance = math.sqrt(m_depth**2 - depth**2)
-        else:
-            yz_distance = math.sqrt(depth**2 - m_depth**2)  # yz 평면 상 거리
-        yz_pixel = math.sqrt(pixel_y**2 + pixel_z**2) # yz 평면 상 픽셀 거리
-        scale_yz = yz_distance / yz_pixel if yz_pixel != 0 else 0
-        
-
-        tf_y = pixel_y * scale_yz
-        tf_z = pixel_z * scale_yz
-
-        point = [depth, tf_y, tf_z]
-
-        return point
+    def remove_outliers(self, data):
+        if len(data) < 4:
+            return data 
+        sorted_data = np.sort(data)
+        q1 = np.percentile(sorted_data, 25)
+        q3 = np.percentile(sorted_data, 75)
+        iqr = q3 - q1
+        lower_bound = q1 - 0.5 * iqr
+        upper_bound = q3 + 0.5 * iqr
+        return [x for x in data if x >= lower_bound and x <= upper_bound]
 
     def send_transform(self, point, text, on):
         light = 'ON' if on else 'OFF'
@@ -165,7 +174,7 @@ class BoxTFPublisher:
         t.header.frame_id = self.frame_id                 
         t.child_frame_id = 'button_' + text + '_' + light
         t.transform.translation.x = point[0]
-        t.transform.translation.y = point[1] * 0.9
+        t.transform.translation.y = point[1] 
         t.transform.translation.z = point[2]
         t.transform.rotation.x = 0.0
         t.transform.rotation.y = 0.0
@@ -213,4 +222,3 @@ if __name__ == '__main__':
         camera.stop()
         recognizer.clear_session()
         cv2.destroyAllWindows()
-      
