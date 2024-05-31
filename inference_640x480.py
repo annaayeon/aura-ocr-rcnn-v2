@@ -12,7 +12,7 @@ from button_recognition import ButtonRecognizer
 import math
 
 DRAW = True
-depth_DRAW = True
+depth_DRAW = False
 
 class RealSenseCamera:
     def __init__(self, width=640, height=480, fps=30, pub_pc=False):
@@ -95,7 +95,6 @@ class BoxTFPublisher:
 
     def publish_transforms(self, recognition_list, depth_frame, intrinsics):
         for recognition in recognition_list:
-            box = recognition[0]
             text = recognition[2]
             pixel = recognition[4]
             on = recognition[5]
@@ -103,19 +102,32 @@ class BoxTFPublisher:
             # point = self.calculate_transform(depth_frame, pixel)  # ay
             self.send_transform(point, text, on)
             
-    def get_3d_coordinates(self, depth_frame, pixel, intrinsics):
+    def get_3d_coordinates(self, depth_frame, pixel, intrinsics, window_size=3):
+        u, v = pixel
+        depth_values = []
+        offset = window_size // 2
+
+        # Collect depth values in the surrounding window
+        for du in range(-offset, offset + 1):
+            for dv in range(-offset, offset + 1):
+                depth = depth_frame.get_distance(u + du, v + dv)
+                if depth > 0:
+                    depth_values.append(depth)
+        if not depth_values:
+            return [0.0, 0.0, 0.0]
+
+        avg_depth = sum(depth_values) / len(depth_values)
+        point = rs.rs2_deproject_pixel_to_point(intrinsics, [u, v], avg_depth)
+        tf_point = self.transform_point(point)
+        return tf_point
+
+    def transform_point(self, point):
         '''
         3D 좌표 (X, Y, Z) = (오른쪽+, 아래+, 앞+)
         tf 좌표 (X, Y, Z) = (앞, 왼쪽+, 위)
         '''
-        u, v = pixel
-        depth = depth_frame.get_distance(u, v)
-        if depth == 0:
-            return [0.0, 0.0, 0.0]
-        point = rs.rs2_deproject_pixel_to_point(intrinsics, [u, v], depth)
-        tf_point = [point[2], -point[0], -point[1]]
+        return [point[2], -point[0], -point[1]]
 
-        return tf_point
 
     def calculate_transform(self, depth_frame, pixel):
         center_x, center_y = pixel
