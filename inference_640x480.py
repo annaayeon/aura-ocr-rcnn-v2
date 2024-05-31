@@ -12,17 +12,21 @@ from button_recognition import ButtonRecognizer
 import math
 
 DRAW = True
-depth_DRAW = False
+depth_DRAW = True
 
 class RealSenseCamera:
     def __init__(self, width=640, height=480, fps=30, pub_pc=False):
+        '''
+        camera instrinsics : [ 640x480  p[319.582 234.765]  f[388.996 388.996]  Brown Conrady [0 0 0 0 0] ] 
+        '''
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, fps)
         self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
         self.profile = self.pipeline.start(self.config)
-        depth_profile = rs.video_stream_profile(self.profile.get_stream(rs.stream.depth))
-        self.intrinsics = depth_profile.get_intrinsics()
+        self.aligned_stream = rs.align(rs.stream.color)
+        self.depth_profile = rs.video_stream_profile(self.profile.get_stream(rs.stream.depth))
+        self.intrinsics = self.depth_profile.get_intrinsics()
         self.pointcloud = rs.pointcloud()
         self.colorizer = rs.colorizer()
         self.pub_pc = pub_pc
@@ -32,6 +36,7 @@ class RealSenseCamera:
 
     def get_frames(self):
         frames = self.pipeline.wait_for_frames()
+        frames = self.aligned_stream.process(frames)
         depth_frame = frames.get_depth_frame()
         color_frame = frames.get_color_frame()
         if not depth_frame or not color_frame:
@@ -93,11 +98,15 @@ class BoxTFPublisher:
             text = recognition[2]
             pixel = recognition[4]
             on = recognition[5]
-            # point = self.get_3d_coordinates(depth_frame, pixel, intrinsics)
-            point = self.calculate_transform(depth_frame, pixel)
+            point = self.get_3d_coordinates(depth_frame, pixel, intrinsics) # realsense
+            # point = self.calculate_transform(depth_frame, pixel)  # ay
             self.send_transform(point, text, on)
             
     def get_3d_coordinates(self, depth_frame, pixel, intrinsics):
+        '''
+        3D 좌표 (X, Y, Z) = (오른쪽+, 아래+, 앞+)
+        tf 좌표 (X, Y, Z) = (앞, 왼쪽+, 위)
+        '''
         u, v = pixel
         depth = depth_frame.get_distance(u, v)
         if depth == 0:
@@ -115,7 +124,11 @@ class BoxTFPublisher:
       my = 240
       
       pixel_y = center_x - mx
+      if pixel_y < 0:
+        pixel_y = -pixel_y
       pixel_z = center_y - my
+      if pixel_z < 0:
+        pixel_z = -pixel_z
       
       if depth**2 < m_depth**2:
         yz_distance = math.sqrt(m_depth**2 - depth**2)
@@ -134,7 +147,7 @@ class BoxTFPublisher:
 
 
     def send_transform(self, point, text, on):
-        if 1 > point[0] > 0:
+        if 0.5 > point[0] > 0:
             if on:
                 light = 'ON'
             else:
