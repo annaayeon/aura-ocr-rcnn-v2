@@ -165,7 +165,7 @@ class BoxTFPublisher:
         t.header.frame_id = self.frame_id                 
         t.child_frame_id = 'button_' + text + '_' + light
         t.transform.translation.x = point[0]
-        t.transform.translation.y = point[1]
+        t.transform.translation.y = point[1] * 0.9
         t.transform.translation.z = point[2]
         t.transform.rotation.x = 0.0
         t.transform.rotation.y = 0.0
