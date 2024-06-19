@@ -144,6 +144,7 @@ class ButtonRecognizer:
     hsv_image[:,:,2] = 150
     processed_image = cv2.cvtColor(hsv_image, cv2.COLOR_HSV2RGB) 
     processed_image = cv2.resize(processed_image, (180, 180))
+    cv2.imshow('img', processed_image)
     processed_image = np.expand_dims(processed_image, axis=0)
     return processed_image
 
