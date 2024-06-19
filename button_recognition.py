@@ -10,7 +10,7 @@ from utils import visualization_utils as vis_util
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.compat.v1.disable_eager_execution()
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # CPU 사용
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # CPU 사용
 
 charset = {'0': 0,  '1': 1,  '2': 2,  '3': 3,  '4': 4,  '5': 5,
            '6': 6,  '7': 7,  '8': 8,  '9': 9,  'A': 10, 'B': 11,

@@ -96,7 +96,7 @@ class BoxTFPublisher:
         self.tf_translation_y_vals = []
         self.tf_translation_z_vals = []
         self.data_count = 0
-        self.data_limit = 20  #
+        self.data_limit = 10  #
 
     def publish_transforms(self, recognition_list, depth_frame, intrinsics):
         for recognition in recognition_list:
